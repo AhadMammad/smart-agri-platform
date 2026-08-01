@@ -1,0 +1,144 @@
+[project]
+name = "smart-agri"
+version = "0.1.0"
+description = "ETL application for the smart-agri-platform: Postgres -> HDFS Parquet lake -> ClickHouse"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+
+dependencies = [
+    # --- compute ---
+    "polars==1.17.1",
+    "pyarrow==18.1.0",
+    # --- lake I/O (WebHDFS keeps this image JVM-free) ---
+    "fsspec==2024.10.0",
+    "requests==2.32.3",
+    # --- source / sink drivers ---
+    "adbc-driver-postgresql==1.3.0",
+    "psycopg[binary]==3.2.3",
+    "clickhouse-connect==0.8.15",
+    # --- modelling & validation ---
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.0",
+    "pandera[polars]==0.22.1",
+    # --- runtime ---
+    # >=0.16 required: earlier releases call click's `Parameter.make_metavar()`
+    # without a context, which crashes `--help` against click >=8.2.
+    "typer==0.27.0",
+    "structlog==24.4.0",
+    "tenacity==9.0.0",
+]
+
+[project.scripts]
+# DockerOperator invokes the container as: smart-agri <command> [options]
+smart-agri = "smart_agri.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "responses==0.25.3",
+    "ruff==0.8.4",
+    "mypy==1.14.0",
+    "types-requests==2.32.0.20241016",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/smart_agri"]
+
+# =============================================================================
+# Ruff — lint + format
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "SIM",       # simplify
+    "TCH",       # type-checking imports
+    "PTH",       # prefer pathlib
+    "RET",       # return consistency
+    "ARG",       # unused arguments
+    "PL",        # pylint subset
+    "RUF",
+]
+ignore = [
+    "PLR0913",   # many arguments — pipeline constructors legitimately take several
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use magic values freely, and importing pytest at runtime is normal
+# even when a given module only references it in annotations.
+"tests/**" = ["PLR2004", "ARG001", "ARG002", "TC002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["smart_agri"]
+
+# =============================================================================
+# Mypy — strict
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+packages = ["smart_agri"]
+mypy_path = "src"
+strict = true
+warn_unreachable = true
+warn_no_return = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = true
+show_error_codes = true
+pretty = true
+
+[[tool.mypy.overrides]]
+# These ship without complete stubs; we still type our own call sites.
+module = ["pandera.*", "clickhouse_connect.*", "adbc_driver_postgresql.*", "fsspec.*"]
+ignore_missing_imports = true
+
+# =============================================================================
+# Pytest
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+markers = [
+    "integration: requires the live Docker stack (deselect with '-m \"not integration\"')",
+]
+
+# =============================================================================
+# Coverage — the gate CI enforces
+# =============================================================================
+[tool.coverage.run]
+source = ["src/smart_agri"]
+branch = true
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]

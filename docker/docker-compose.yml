@@ -1,0 +1,416 @@
+# =============================================================================
+# smart-agri-platform — local stack
+#
+# Profiles (see the Makefile for the wrapper targets):
+#   core           postgres, clickhouse, HDFS, Hive Metastore
+#   orchestration  Airflow (CeleryExecutor) + its dependencies
+#   bi             Superset
+#
+# Every service is pinned to an explicit image tag via .env.
+# =============================================================================
+
+name: ${COMPOSE_PROJECT_NAME:-smart-agri}
+
+# -----------------------------------------------------------------------------
+# Shared fragments
+# -----------------------------------------------------------------------------
+x-hadoop-common: &hadoop-common
+  image: ${HADOOP_IMAGE}
+  # The image's default `hadoop` user cannot write to fresh named volumes, which
+  # are created root-owned. Running as root avoids a chown dance on every boot.
+  user: root
+  env_file:
+    - ./hadoop/hadoop.env
+  networks: [agri-net]
+  restart: unless-stopped
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+    args:
+      AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
+  image: smart-agri-airflow:local
+  # Must be able to read /var/run/docker.sock — DockerOperator spawns siblings.
+  user: "${AIRFLOW_UID:-50000}:0"
+  group_add:
+    - "${DOCKER_GID:-999}"
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: utc
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/${AIRFLOW_DB}
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/${AIRFLOW_DB}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # Passed through to the DAGs so DockerOperator knows what to launch and where.
+    ETL_IMAGE: ${ETL_IMAGE}
+    ETL_TASK_NETWORK: ${ETL_TASK_NETWORK}
+    # Backing-service coordinates. Airflow never connects to these itself; it
+    # forwards them into each task container (see airflow/dags/common/etl_task.py).
+    SMART_AGRI_ENV: ${SMART_AGRI_ENV:-dev}
+    SMART_AGRI_LOG_LEVEL: ${SMART_AGRI_LOG_LEVEL:-INFO}
+    POSTGRES_HOST: ${POSTGRES_HOST}
+    POSTGRES_PORT: ${POSTGRES_PORT}
+    POSTGRES_DB: ${POSTGRES_DB}
+    POSTGRES_USER: ${POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+    CLICKHOUSE_HTTP_PORT: ${CLICKHOUSE_HTTP_PORT}
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    HDFS_NAMENODE_HOST: ${HDFS_NAMENODE_HOST}
+    HDFS_NAMENODE_HTTP_PORT: ${HDFS_NAMENODE_HTTP_PORT}
+    HDFS_USER: ${HDFS_USER}
+    HDFS_LAKE_ROOT: ${HDFS_LAKE_ROOT}
+    HIVE_METASTORE_HOST: ${HIVE_METASTORE_HOST}
+    HIVE_METASTORE_PORT: ${HIVE_METASTORE_PORT}
+  volumes:
+    - ../airflow/dags:/opt/airflow/dags
+    - ../airflow/plugins:/opt/airflow/plugins
+    - ../airflow/logs:/opt/airflow/logs
+    - ../airflow/tests:/opt/airflow/tests:ro
+    - /var/run/docker.sock:/var/run/docker.sock
+  networks: [agri-net]
+  depends_on:
+    airflow-db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+# -----------------------------------------------------------------------------
+# Services
+# -----------------------------------------------------------------------------
+services:
+
+  # ---------------------------------------------------------------- core -----
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    profiles: [core, orchestration]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_HOST_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
+  clickhouse:
+    image: ${CLICKHOUSE_IMAGE}
+    profiles: [core, orchestration, bi]
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "${CLICKHOUSE_HTTP_HOST_PORT}:8123"
+      - "${CLICKHOUSE_NATIVE_HOST_PORT}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping | grep -q Ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [agri-net]
+    restart: unless-stopped
+
+  namenode:
+    <<: *hadoop-common
+    profiles: [core, orchestration]
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    environment:
+      # The image formats the NameNode only when this directory is absent, so a
+      # populated volume is never reformatted. This is the sentinel guard.
+      ENSURE_NAMENODE_DIR: /hadoop/dfs/name
+    ports:
+      - "${HDFS_NAMENODE_HTTP_HOST_PORT}:9870"
+    volumes:
+      - hdfs-namenode:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "hdfs dfsadmin -safemode get | grep -q 'Safe mode is OFF'"]
+      interval: 15s
+      timeout: 30s
+      retries: 20
+      start_period: 60s
+
+  datanode:
+    <<: *hadoop-common
+    profiles: [core, orchestration]
+    hostname: datanode
+    command: ["hdfs", "datanode"]
+    ports:
+      - "${HDFS_DATANODE_HTTP_HOST_PORT}:9864"
+    volumes:
+      - hdfs-datanode:/hadoop/dfs/data
+    depends_on:
+      namenode:
+        condition: service_healthy
+
+  # Creates the lake zone directories, then exits. Idempotent.
+  hdfs-init:
+    <<: *hadoop-common
+    profiles: [core, orchestration]
+    restart: "no"
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        for zone in bronze silver gold quarantine; do
+          hdfs dfs -mkdir -p "${HDFS_LAKE_ROOT}/$${zone}"
+        done
+        hdfs dfs -chmod -R 777 "${HDFS_LAKE_ROOT}"
+        echo "lake zones ready:"
+        hdfs dfs -ls "${HDFS_LAKE_ROOT}"
+    depends_on:
+      namenode:
+        condition: service_healthy
+      datanode:
+        condition: service_started
+
+  metastore-db:
+    image: ${POSTGRES_IMAGE}
+    profiles: [core, orchestration]
+    environment:
+      POSTGRES_DB: ${METASTORE_DB}
+      POSTGRES_USER: ${METASTORE_DB_USER}
+      POSTGRES_PASSWORD: ${METASTORE_DB_PASSWORD}
+    volumes:
+      - metastore-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${METASTORE_DB_USER} -d ${METASTORE_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
+  hive-metastore:
+    image: ${HIVE_IMAGE}
+    profiles: [core, orchestration]
+    hostname: hive-metastore
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      # `-initSchema` is safe to repeat: it is a no-op once the schema exists.
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://metastore-db:5432/${METASTORE_DB}
+        -Djavax.jdo.option.ConnectionUserName=${METASTORE_DB_USER}
+        -Djavax.jdo.option.ConnectionPassword=${METASTORE_DB_PASSWORD}
+        -Dhive.metastore.warehouse.dir=hdfs://namenode:8020${HDFS_LAKE_ROOT}/warehouse
+      IS_RESUME: "true"
+    ports:
+      - "${HIVE_METASTORE_HOST_PORT}:9083"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9083'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    depends_on:
+      metastore-db:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+    networks: [agri-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------- orchestration -----
+  airflow-db:
+    image: ${POSTGRES_IMAGE}
+    profiles: [orchestration]
+    environment:
+      POSTGRES_DB: ${AIRFLOW_DB}
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER} -d ${AIRFLOW_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
+  redis:
+    image: ${REDIS_IMAGE}
+    profiles: [orchestration]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    profiles: [orchestration]
+    restart: "no"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -euo pipefail
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER}" --password "${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname Admin --lastname User --role Admin \
+          --email "${AIRFLOW_ADMIN_EMAIL}" || true
+        echo "airflow initialised"
+    environment:
+      <<: *airflow-env
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
+
+  airflow-webserver:
+    <<: *airflow-common
+    profiles: [orchestration]
+    command: webserver
+    ports:
+      - "${AIRFLOW_HOST_PORT}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    profiles: [orchestration]
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8974/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-worker:
+    <<: *airflow-common
+    profiles: [orchestration]
+    command: celery worker
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d celery@$${HOSTNAME} || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-triggerer:
+    <<: *airflow-common
+    profiles: [orchestration]
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname $${HOSTNAME} || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ bi -----
+  superset-db:
+    image: ${POSTGRES_IMAGE}
+    profiles: [bi]
+    environment:
+      POSTGRES_DB: ${SUPERSET_DB}
+      POSTGRES_USER: ${SUPERSET_DB_USER}
+      POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD}
+    volumes:
+      - superset-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUPERSET_DB_USER} -d ${SUPERSET_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
+  superset:
+    build:
+      context: ./superset
+      args:
+        SUPERSET_IMAGE: ${SUPERSET_IMAGE}
+    image: smart-agri-superset:local
+    profiles: [bi]
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      SUPERSET_DB_URI: postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB}
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+      CLICKHOUSE_HTTP_PORT: ${CLICKHOUSE_HTTP_PORT}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    ports:
+      - "${SUPERSET_HOST_PORT}:8088"
+    volumes:
+      - ../superset/assets:/app/assets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8088/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    depends_on:
+      superset-db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks: [agri-net]
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------------
+networks:
+  agri-net:
+    name: ${COMPOSE_PROJECT_NAME:-smart-agri}_agri-net
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  hdfs-namenode:
+  hdfs-datanode:
+  metastore-db-data:
+  airflow-db-data:
+  superset-db-data:

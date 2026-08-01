@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  ClickHouse tuning for the smart-agri analytics warehouse.
+
+  Note what is deliberately absent: any HDFS configuration. Parquet is loaded by
+  the ETL application (WebHDFS -> Polars -> clickhouse-connect), not by
+  ClickHouse's `hdfs()` table function, which depends on an optional libhdfs3
+  build that is not reliably present in the official images.
+-->
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <console>true</console>
+    </logger>
+
+    <!-- Single-node dev warehouse: keep memory well inside the VM's budget. -->
+    <max_server_memory_usage_to_ram_ratio>0.5</max_server_memory_usage_to_ram_ratio>
+    <mark_cache_size>536870912</mark_cache_size>
+
+    <!-- Retain query history so slow dashboard queries can be profiled from
+         system.query_log during the Gold-layer work in Phase 6. -->
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+    </query_log>
+</clickhouse>

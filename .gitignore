@@ -1,0 +1,47 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# ---- Tooling caches ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ---- Environment ----
+.env
+.env.local
+*.local.env
+
+# ---- Docker / runtime volumes ----
+# Container state must never be committed. `make clean` recreates it.
+.volumes/
+docker/**/data/
+logs/
+
+# ---- Airflow ----
+airflow/logs/
+airflow/airflow.db
+airflow/webserver_config.py
+
+# ---- Liquibase ----
+liquibase/*.log
+
+# ---- Generated data ----
+data/out/
+*.parquet
+
+# ---- Editors / OS ----
+.idea/
+.vscode/
+.DS_Store
