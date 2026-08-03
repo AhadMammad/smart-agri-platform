@@ -124,10 +124,13 @@ jobs:
 
       - name: Run DAG integrity tests
         run: |
+          # `bash -c` is required: the Airflow image's entrypoint forwards its
+          # arguments to the `airflow` CLI, so a bare `pytest` is parsed as an
+          # airflow subcommand and rejected.
           docker run --rm \
             -e AIRFLOW__CORE__LOAD_EXAMPLES=false \
             -e AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags \
             -v "${PWD}/airflow/dags:/opt/airflow/dags:ro" \
             -v "${PWD}/airflow/tests:/opt/airflow/tests:ro" \
             smart-agri-airflow:ci \
-            pytest /opt/airflow/tests -q
+            bash -c "pytest /opt/airflow/tests -q"

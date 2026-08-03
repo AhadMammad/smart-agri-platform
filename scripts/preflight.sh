@@ -75,15 +75,19 @@ else
 fi
 
 CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)
-[ "$CPUS" -ge 4 ] && pass "${CPUS} CPUs" || warn "${CPUS} CPUs — expect slow Hadoop startup"
+if [ "$CPUS" -ge 4 ]; then
+  pass "${CPUS} CPUs"
+else
+  warn "${CPUS} CPUs — expect slow Hadoop startup"
+fi
 
 DISK_GB=$(df -BG --output=avail . 2>/dev/null | tail -1 | tr -dc '0-9')
-if [ -n "${DISK_GB:-}" ]; then
-  [ "$DISK_GB" -ge 30 ] \
-    && pass "${DISK_GB} GB free disk" \
-    || fail "${DISK_GB} GB free disk — images alone need roughly 20 GB"
-else
+if [ -z "${DISK_GB:-}" ]; then
   warn "cannot determine free disk space"
+elif [ "$DISK_GB" -ge 30 ]; then
+  pass "${DISK_GB} GB free disk"
+else
+  fail "${DISK_GB} GB free disk — images alone need roughly 20 GB"
 fi
 echo
 
