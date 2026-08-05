@@ -75,6 +75,53 @@ jobs:
         run: make validate-compose
 
   # ---------------------------------------------------------------------------
+  assets:
+    name: Superset and Liquibase assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Superset YAML parses, and chart params are valid JSON
+        run: |
+          python -m pip install --quiet pyyaml
+          python - <<'PY'
+          import json, pathlib, sys, yaml
+
+          root = pathlib.Path("superset/assets")
+          failures = []
+          for path in sorted(root.rglob("*.yaml")):
+              try:
+                  doc = yaml.safe_load(path.read_text())
+                  # A chart's `params` is a JSON document embedded in a YAML
+                  # string; a syntax error there only surfaces at import time.
+                  if path.parent.name == "charts":
+                      json.loads(doc["params"])
+              except Exception as exc:  # noqa: BLE001
+                  failures.append(f"{path}: {exc}")
+
+          for failure in failures:
+              print(f"::error::{failure}")
+          sys.exit(1 if failures else 0)
+          PY
+
+      - name: Liquibase changelogs are well-formed XML
+        run: |
+          python - <<'PY'
+          import pathlib, sys, xml.etree.ElementTree as ET
+
+          failures = []
+          for path in sorted(pathlib.Path("liquibase").rglob("*.xml")):
+              try:
+                  ET.parse(path)
+              except ET.ParseError as exc:
+                  failures.append(f"{path}: {exc}")
+
+          for failure in failures:
+              print(f"::error::{failure}")
+          sys.exit(1 if failures else 0)
+          PY
+
+  # ---------------------------------------------------------------------------
   # The full stack is too heavy for a hosted runner (HDFS + Hive + Airflow +
   # Superset). This job proves the ETL image builds and its CLI runs; the
   # integration suite is exercised on the VM via `make test-integration`.

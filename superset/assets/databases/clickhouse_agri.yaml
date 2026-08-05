@@ -1,0 +1,17 @@
+# The analytics warehouse connection.
+#
+# The URI carries ${...} placeholders which `make superset-import` substitutes
+# from .env, so no credential — not even a dev one — is committed.
+database_name: ClickHouse (agri)
+sqlalchemy_uri: clickhousedb://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}/${CLICKHOUSE_DB}
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  allows_virtual_table_explore: true
+uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a
+version: 1.0.0

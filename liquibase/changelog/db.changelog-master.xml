@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Master changelog for the source database.
+
+  Changesets are append-only: once a file has been applied anywhere, edit it
+  never — add a new changeset instead. Liquibase tracks checksums and will
+  refuse to run against a modified, already-applied changeset.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- Phase 2: the soil-sensor slice -->
+    <include file="changes/001-schemas.xml" relativeToChangelogFile="true"/>
+    <include file="changes/002-farm-field.xml" relativeToChangelogFile="true"/>
+    <include file="changes/003-sensor.xml" relativeToChangelogFile="true"/>
+    <include file="changes/004-sensor-reading.xml" relativeToChangelogFile="true"/>
+    <include file="changes/005-etl-control.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

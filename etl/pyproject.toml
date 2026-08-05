@@ -88,6 +88,16 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["smart_agri"]
 
+[tool.ruff.lint.flake8-type-checking]
+# pydantic and pandera resolve annotations at runtime, so their imports must not
+# be moved into a TYPE_CHECKING block even though they only appear in
+# annotations — doing so breaks model construction at import time.
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+]
+runtime-evaluated-decorators = ["pydantic.validate_call"]
+
 # =============================================================================
 # Mypy — strict
 # =============================================================================
@@ -114,7 +124,7 @@ ignore_missing_imports = true
 # =============================================================================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = [
     "--strict-markers",
     "--strict-config",

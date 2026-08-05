@@ -1,0 +1,12 @@
+# Per-field readings for the selected period, most stressed first
+slice_name: Current field conditions
+description: Per-field readings for the selected period, most stressed first
+certified_by: null
+certification_details: null
+viz_type: table
+params: '{"datasource": "5da48fcf-262a-535f-9c69-cf82dcc22632__table", "granularity_sqla": "reading_date", "time_range": "No filter", "row_limit": 200, "viz_type": "table", "query_mode": "raw", "all_columns": ["field_name", "farm_name", "region", "soil_type", "avg_soil_moisture_pct", "avg_soil_temperature_c", "avg_soil_ph", "min_battery_pct", "moisture_stress"], "order_by_cols": ["[\"avg_soil_moisture_pct\", true]"]}'
+query_context: null
+cache_timeout: null
+uuid: fba58a7d-ec4d-50ae-bb9c-eba39e80ccda
+version: 1.0.0
+dataset_uuid: 5da48fcf-262a-535f-9c69-cf82dcc22632

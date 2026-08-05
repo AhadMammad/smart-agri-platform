@@ -101,6 +101,48 @@ Heavier than LocalExecutor by a Redis instance and a worker container, and
 chosen deliberately: it matches a production topology, so task isolation and
 queue behaviour are exercised during development rather than discovered later.
 
+### Incremental Bronze appends; it never replaces
+
+The snapshot pipelines clear their partition before writing, because they
+re-extract the whole table every run. `BronzeIncrementalPipeline` does the
+opposite, and the distinction is load-bearing.
+
+A watermark extract returns only rows newer than the last successful run. If
+that result were written over the partition, two things would break:
+
+1. A re-run after the watermark has caught up extracts **zero** rows. Writing
+   that empty frame over a populated partition deletes the readings already
+   landed — and Silver, Gold and ClickHouse all empty on the following run.
+2. Even a non-empty re-run would drop the earlier batches, which the watermark
+   guarantees will never be extracted again.
+
+So each batch lands as its own file inside the partition, named after its
+high-water mark, and an empty batch writes nothing at all. Silver therefore
+reads the Bronze partition as a *directory*, not a single file.
+
+`test_empty_batch_does_not_overwrite_a_populated_partition` pins this.
+
+### Phase 2 loads are full-refresh
+
+Gold recomputes the whole aggregate each run, and the ClickHouse loads replace
+their tables rather than swapping a partition. At demo volumes this costs
+nothing and removes an entire class of partial-update bugs while the pipeline is
+still being proven end to end.
+
+`ClickHouseSink.delete_partition` already exists for Phase 6, where volumes make
+partition-level replacement worth the added complexity.
+
+### Aggregation lives in Polars, not SQL
+
+`agg_field_soil_daily` is built by the Gold pipeline and inserted as a plain
+table, rather than being defined as a ClickHouse materialized view over the
+fact. The moisture-stress classification and the daily rollups are therefore
+unit-tested against fixture frames instead of living in a SQL string no test can
+reach.
+
+The one materialized view that does exist — `mv_field_soil_weekly` — only rolls
+the already-tested daily aggregate up to weeks.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:

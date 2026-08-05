@@ -1,0 +1,12 @@
+# How many field-days fell into each moisture stress band
+slice_name: Field days by moisture stress
+description: How many field-days fell into each moisture stress band
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params: '{"datasource": "5da48fcf-262a-535f-9c69-cf82dcc22632__table", "granularity_sqla": "reading_date", "time_range": "No filter", "row_limit": 10000, "viz_type": "echarts_timeseries_bar", "x_axis": "reading_date", "time_grain_sqla": "P1D", "metrics": ["count"], "groupby": ["moisture_stress"], "stack": "Stack", "y_axis_title": "Field-days", "show_legend": true}'
+query_context: null
+cache_timeout: null
+uuid: 284a41b9-cd33-56ee-83ca-79a7a505c162
+version: 1.0.0
+dataset_uuid: 5da48fcf-262a-535f-9c69-cf82dcc22632

@@ -1,0 +1,286 @@
+# The daily field aggregate — the dashboard's primary source.
+#
+# Physical table, not a virtual dataset: the Gold pipeline has already joined
+# the dimension attributes onto every row, so no SQL is needed here.
+table_name: agg_field_soil_daily
+main_dttm_col: reading_date
+description: Daily soil metrics per field, produced by the Gold pipeline
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
+metrics:
+  - metric_name: count
+    verbose_name: Rows
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: null
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: avg_moisture
+    verbose_name: Avg soil moisture (%)
+    metric_type: avg
+    expression: AVG(avg_soil_moisture_pct)
+    description: Mean volumetric soil moisture across the selected fields
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: avg_temperature
+    verbose_name: Avg soil temperature (°C)
+    metric_type: avg
+    expression: AVG(avg_soil_temperature_c)
+    description: null
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: fields_tracked
+    verbose_name: Fields tracked
+    metric_type: count_distinct
+    expression: COUNT(DISTINCT field_id)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: dry_field_days
+    verbose_name: Dry field-days
+    metric_type: sum
+    expression: "SUM(CASE WHEN moisture_stress = 'dry' THEN 1 ELSE 0 END)"
+    description: Field-days classified as moisture-stressed
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: reading_date
+    verbose_name: Date
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: country_code
+    verbose_name: Country
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_name
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_name
+    verbose_name: Field
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_code
+    verbose_name: Field code
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: soil_type
+    verbose_name: Soil type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: moisture_stress
+    verbose_name: Moisture stress
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: dry / optimal / wet / unknown
+    python_date_format: null
+    extra: null
+  - column_name: avg_soil_moisture_pct
+    verbose_name: Soil moisture (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: avg_soil_temperature_c
+    verbose_name: Soil temperature (°C)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: avg_soil_ph
+    verbose_name: Soil pH
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: avg_soil_ec_ds_m
+    verbose_name: Conductivity (dS/m)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: min_battery_pct
+    verbose_name: Min battery (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: active_sensors
+    verbose_name: Active sensors
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: reading_count
+    verbose_name: Readings
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_area_ha
+    verbose_name: Field area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

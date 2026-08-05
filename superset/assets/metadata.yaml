@@ -1,0 +1,8 @@
+# Superset export bundle metadata.
+#
+# `type: Dashboard` makes the whole tree importable with
+# `superset import-dashboards`, which pulls in the databases, datasets and
+# charts the dashboards reference.
+version: 1.0.0
+type: Dashboard
+timestamp: '2026-08-01T00:00:00+00:00'

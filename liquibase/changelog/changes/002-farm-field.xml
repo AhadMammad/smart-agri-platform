@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="002-1-farm" author="data-platform">
+        <createTable tableName="farm" schemaName="agri" remarks="A managed agricultural holding">
+            <column name="farm_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_farm"/>
+            </column>
+            <column name="farm_code" type="VARCHAR(20)" remarks="Stable business key, e.g. NG-001">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_farm_code"/>
+            </column>
+            <column name="name" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="country_code" type="CHAR(2)" remarks="ISO 3166-1 alpha-2">
+                <constraints nullable="false"/>
+            </column>
+            <column name="region" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Farm-level coordinates: weather is fetched once per farm and
+                 joined down to its fields (see docs/architecture.md). -->
+            <column name="latitude" type="NUMERIC(9,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="longitude" type="NUMERIC(9,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area_ha" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.farm ADD CONSTRAINT ck_farm_latitude
+                CHECK (latitude BETWEEN -90 AND 90);
+            ALTER TABLE agri.farm ADD CONSTRAINT ck_farm_longitude
+                CHECK (longitude BETWEEN -180 AND 180);
+            ALTER TABLE agri.farm ADD CONSTRAINT ck_farm_area_positive
+                CHECK (area_ha > 0);
+            CREATE TRIGGER trg_farm_touch BEFORE UPDATE ON agri.farm
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback>
+            <dropTable tableName="farm" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-2-field" author="data-platform">
+        <createTable tableName="field" schemaName="agri" remarks="A cultivated parcel within a farm">
+            <column name="field_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_field"/>
+            </column>
+            <column name="field_code" type="VARCHAR(24)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_field_code"/>
+            </column>
+            <column name="farm_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_field_farm"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="farm"
+                             referencedColumnNames="farm_id"/>
+            </column>
+            <column name="name" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area_ha" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="soil_type" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.field ADD CONSTRAINT ck_field_area_positive
+                CHECK (area_ha > 0);
+            CREATE INDEX ix_field_farm_id ON agri.field (farm_id);
+            CREATE TRIGGER trg_field_touch BEFORE UPDATE ON agri.field
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback>
+            <dropTable tableName="field" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

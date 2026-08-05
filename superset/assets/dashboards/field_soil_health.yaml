@@ -1,0 +1,223 @@
+# Field & crop health — the Phase 2 dashboard.
+#
+# Layout is a single column of rows: the moisture trend on top (the question
+# most often asked), the stress breakdown beside it, then the per-field table.
+dashboard_title: Field & Crop Health
+description: Soil moisture, temperature and stress by field, farm and region
+css: ''
+slug: field-soil-health
+uuid: 714c8061-3ec0-568f-8fc7-bbb67859cd02
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-header
+      - ROW-trend
+      - ROW-detail
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Field & Crop Health
+
+  ROW-header:
+    type: ROW
+    id: ROW-header
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 22
+      code: |-
+        ## Field & Crop Health
+
+        Daily soil metrics per field, from the `agg_field_soil_daily` table
+        produced by the Gold pipeline. **Moisture stress** is derived from mean
+        volumetric moisture: below 15% is *dry*, above 38% is *wet*.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-header
+
+  ROW-trend:
+    type: ROW
+    id: ROW-trend
+    children:
+      - CHART-moisture-trend
+      - CHART-stress-breakdown
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-moisture-trend:
+    type: CHART
+    id: CHART-moisture-trend
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: e5d2a9bc-ad1c-5e5c-8b80-cdfdec46d443
+      sliceName: Soil moisture trend by region
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-trend
+  CHART-stress-breakdown:
+    type: CHART
+    id: CHART-stress-breakdown
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 284a41b9-cd33-56ee-83ca-79a7a505c162
+      sliceName: Field days by moisture stress
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-trend
+
+  ROW-detail:
+    type: ROW
+    id: ROW-detail
+    children:
+      - CHART-field-conditions
+      - CHART-temp-vs-moisture
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-field-conditions:
+    type: CHART
+    id: CHART-field-conditions
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: fba58a7d-ec4d-50ae-bb9c-eba39e80ccda
+      sliceName: Current field conditions
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-detail
+  CHART-temp-vs-moisture:
+    type: CHART
+    id: CHART-temp-vs-moisture
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: 281cf608-099b-593b-88f0-48c53f02b88b
+      sliceName: Moisture vs temperature by soil type
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-detail
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  # Filters the dashboard opens with. Region and field are the two dimensions
+  # an agronomist narrows by first.
+  native_filter_configuration:
+    - id: NATIVE_FILTER-region
+      name: Region
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
+          column:
+            name: region
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-field
+      name: Field
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
+          column:
+            name: field_name
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-soil
+      name: Soil type
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
+          column:
+            name: soil_type
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-date
+      name: Date range
+      filterType: filter_time
+      controlValues: {}
+      targets:
+        - datasetUuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []

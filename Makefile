@@ -15,9 +15,17 @@ COMPOSE  := docker compose --env-file $(ENV_FILE) -f $(ROOT)/docker/docker-compo
 UV       := uv --directory $(ROOT)/etl
 
 # Values needed before .env exists are read with a default.
-ETL_IMAGE      ?= $(shell grep -E '^ETL_IMAGE=' $(ENV_FILE) 2>/dev/null | cut -d= -f2 || echo smart-agri-etl:local)
-ETL_TEST_IMAGE ?= $(ETL_IMAGE)-test
-NETWORK        ?= $(shell grep -E '^ETL_TASK_NETWORK=' $(ENV_FILE) 2>/dev/null | cut -d= -f2 || echo smart-agri_agri-net)
+# Read a key from .env, falling back to a default when .env does not exist yet.
+envval = $(or $(shell grep -E '^$(1)=' $(ENV_FILE) 2>/dev/null | cut -d= -f2-),$(2))
+
+ETL_IMAGE       ?= $(call envval,ETL_IMAGE,smart-agri-etl:local)
+ETL_TEST_IMAGE  ?= $(ETL_IMAGE)-test
+NETWORK         ?= $(call envval,ETL_TASK_NETWORK,smart-agri_agri-net)
+LIQUIBASE_IMAGE ?= $(call envval,LIQUIBASE_IMAGE,liquibase/liquibase:4.30)
+PG_HOST         ?= $(call envval,POSTGRES_HOST,postgres)
+PG_DB           ?= $(call envval,POSTGRES_DB,agri)
+PG_USER         ?= $(call envval,POSTGRES_USER,agri)
+PG_PASSWORD     ?= $(call envval,POSTGRES_PASSWORD,agri)
 
 .PHONY: help
 help: ## Show this help
@@ -128,6 +136,76 @@ logs: ## Tail logs; pass SERVICE=<name> to narrow (e.g. make logs SERVICE=nameno
 .PHONY: doctor
 doctor: ## Check every backing service from inside a task container
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) $(ETL_IMAGE) doctor
+
+# -----------------------------------------------------------------------------
+# Data platform — schema, seed data, pipelines
+# -----------------------------------------------------------------------------
+.PHONY: migrate
+migrate: ## Apply the Liquibase changelogs to Postgres
+	docker run --rm --network $(NETWORK) \
+	  -v $(ROOT)/liquibase/changelog:/liquibase/changelog:ro \
+	  $(LIQUIBASE_IMAGE) \
+	  --changeLogFile=changelog/db.changelog-master.xml \
+	  --url="jdbc:postgresql://$(PG_HOST):5432/$(PG_DB)" \
+	  --username=$(PG_USER) --password=$(PG_PASSWORD) \
+	  update
+
+.PHONY: migrate-status
+migrate-status: ## Show which changesets are pending
+	docker run --rm --network $(NETWORK) \
+	  -v $(ROOT)/liquibase/changelog:/liquibase/changelog:ro \
+	  $(LIQUIBASE_IMAGE) \
+	  --changeLogFile=changelog/db.changelog-master.xml \
+	  --url="jdbc:postgresql://$(PG_HOST):5432/$(PG_DB)" \
+	  --username=$(PG_USER) --password=$(PG_PASSWORD) \
+	  status --verbose
+
+.PHONY: init-clickhouse
+init-clickhouse: ## Create the ClickHouse tables, views and materialized views
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  -v $(ROOT)/clickhouse/ddl:/opt/clickhouse/ddl:ro \
+	  $(ETL_IMAGE) init-clickhouse
+
+.PHONY: seed
+seed: ## Generate synthetic data into Postgres; PROFILE=small|medium|large
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) seed --profile $(or $(PROFILE),small)
+
+.PHONY: run
+run: ## Run one pipeline; PIPELINE=silver.dim_farm [DATE=YYYY-MM-DD]
+	@test -n "$(PIPELINE)" || { echo "usage: make run PIPELINE=<name> [DATE=...]"; exit 2; }
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) run $(PIPELINE) $(if $(DATE),--date $(DATE),)
+
+.PHONY: run-all
+run-all: ## Run the whole soil-sensor slice locally (Airflow runs it as tasks)
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) run-all $(if $(DATE),--date $(DATE),)
+
+.PHONY: pipelines
+pipelines: ## List the registered pipelines in execution order
+	docker run --rm --env-file $(ENV_FILE) $(ETL_IMAGE) list-pipelines
+
+.PHONY: demo
+demo: ## Zero to dashboard: migrate, seed, build the warehouse, load, import charts
+	@$(MAKE) --no-print-directory migrate
+	@$(MAKE) --no-print-directory init-clickhouse
+	@$(MAKE) --no-print-directory seed
+	@$(MAKE) --no-print-directory run-all
+	@$(MAKE) --no-print-directory superset-import
+	@echo ""
+	@$(MAKE) --no-print-directory urls
+
+# -----------------------------------------------------------------------------
+# Superset assets
+# -----------------------------------------------------------------------------
+.PHONY: superset-import
+superset-import: ## Import the YAML dashboards, charts and datasets
+	@bash $(ROOT)/scripts/superset_import.sh
+
+.PHONY: superset-export
+superset-export: ## Export the live dashboards back into superset/assets/
+	@bash $(ROOT)/scripts/superset_export.sh
 
 .PHONY: hdfs-init
 hdfs-init: ## (Re-)create the lake zone directories in HDFS

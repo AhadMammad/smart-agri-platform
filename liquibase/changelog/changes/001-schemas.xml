@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Two schemas, deliberately separated:
+        agri         business data, the only thing the extractors read
+        etl_control  pipeline bookkeeping, written by the ETL app itself
+      Keeping watermarks out of `agri` means a full-schema snapshot can never
+      accidentally ingest the platform's own state.
+    -->
+    <changeSet id="001-1-schema-agri" author="data-platform">
+        <sql>CREATE SCHEMA IF NOT EXISTS agri</sql>
+        <rollback>DROP SCHEMA IF EXISTS agri CASCADE</rollback>
+    </changeSet>
+
+    <changeSet id="001-2-schema-etl-control" author="data-platform">
+        <sql>CREATE SCHEMA IF NOT EXISTS etl_control</sql>
+        <rollback>DROP SCHEMA IF EXISTS etl_control CASCADE</rollback>
+    </changeSet>
+
+    <!--
+      Every mutable table carries updated_at, because the incremental extractor
+      uses it as the watermark column. A shared trigger function keeps it honest
+      regardless of how a row is written.
+    -->
+    <changeSet id="001-3-touch-updated-at-function" author="data-platform">
+        <sql splitStatements="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION agri.touch_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = now();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        ]]></sql>
+        <rollback>DROP FUNCTION IF EXISTS agri.touch_updated_at()</rollback>
+    </changeSet>
+
+</databaseChangeLog>

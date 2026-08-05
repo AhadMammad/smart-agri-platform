@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      The only high-volume table in Phase 2, and the one the incremental
+      extractor reads. Readings are immutable in practice, but updated_at is
+      still maintained so the watermark logic is identical for every fact table
+      added in Phase 5.
+    -->
+    <changeSet id="004-1-sensor-reading" author="data-platform">
+        <createTable tableName="sensor_reading" schemaName="agri"
+                     remarks="Time-series soil measurements from a sensor">
+            <column name="reading_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_sensor_reading"/>
+            </column>
+            <column name="sensor_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_reading_sensor"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="sensor"
+                             referencedColumnNames="sensor_id"/>
+            </column>
+            <column name="reading_ts" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Nullable on purpose: a real probe drops individual channels,
+                 and the Silver contract has to cope with that. -->
+            <column name="soil_moisture_pct" type="NUMERIC(5,2)"/>
+            <column name="soil_temperature_c" type="NUMERIC(5,2)"/>
+            <column name="soil_ph" type="NUMERIC(4,2)"/>
+            <column name="soil_ec_ds_m" type="NUMERIC(6,3)" remarks="Electrical conductivity, dS/m"/>
+            <column name="battery_pct" type="NUMERIC(5,2)"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.sensor_reading ADD CONSTRAINT uq_reading_sensor_ts
+                UNIQUE (sensor_id, reading_ts);
+
+            -- Drives the incremental extract; without it every run scans the table.
+            CREATE INDEX ix_reading_updated_at ON agri.sensor_reading (updated_at);
+            CREATE INDEX ix_reading_sensor_ts  ON agri.sensor_reading (sensor_id, reading_ts);
+
+            CREATE TRIGGER trg_reading_touch BEFORE UPDATE ON agri.sensor_reading
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback>
+            <dropTable tableName="sensor_reading" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

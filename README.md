@@ -51,10 +51,40 @@ make env             # create .env, generate secrets, detect UID/docker GID
 make build           # build the ETL, Airflow and Superset images
 make up-all          # start every profile
 make doctor          # confirm all backing services are reachable
+make demo            # migrate, seed, run the whole slice, import dashboards
 make urls            # print the web UIs
 ```
 
 `make` on its own lists every target.
+
+## The soil-sensor slice
+
+`make demo` runs the Phase 2 vertical slice end to end. Individually:
+
+```bash
+make migrate                     # Liquibase changelogs -> Postgres
+make init-clickhouse             # ClickHouse tables, views, materialized views
+make seed PROFILE=small          # synthetic farms, fields, sensors, readings
+make run-all                     # Bronze -> Silver -> Gold -> ClickHouse
+make superset-import             # dashboards, charts and datasets from YAML
+```
+
+`PROFILE` is `small` (5 farms, ~28k readings), `medium` (a full season) or
+`large` (three seasons at 15-minute density). The generator is deterministic:
+the same profile and seed reproduce the same dataset everywhere.
+
+The same pipelines run in Airflow as the `soil_sensor_daily` DAG — fourteen
+`DockerOperator` tasks in four stages. To run one by hand:
+
+```bash
+make pipelines                                    # list them
+make run PIPELINE=silver.dim_farm DATE=2026-08-01
+```
+
+Generated farms sit in real agricultural regions of **North Africa** (Nile
+Delta, Gharb, Cap Bon) and **West Africa** (Kano, Ashanti, Sine-Saloum), each
+with its own rainfall pattern, so soil moisture shows a genuine seasonal cycle
+rather than noise.
 
 ## Profiles
 
@@ -118,8 +148,8 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Repo foundation and infrastructure | **done** |
-| 2 | Thin end-to-end slice: soil sensor readings | next |
-| 3 | Full OLTP schema and data generator | |
+| 2 | Thin end-to-end slice: soil sensor readings | **done** |
+| 3 | Full OLTP schema and data generator | next |
 | 4 | Weather ingestion (Open-Meteo) | |
 | 5 | Bronze and Silver for all domains | |
 | 6 | Gold layer and full ClickHouse star schema | |

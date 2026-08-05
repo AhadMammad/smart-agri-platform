@@ -9,6 +9,7 @@ pipeline object, and delegate.
 from __future__ import annotations
 
 import sys
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 import typer
@@ -24,6 +25,26 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+_DateOption = Annotated[
+    str | None,
+    typer.Option(
+        "--date",
+        "-d",
+        help="Logical date as YYYY-MM-DD. Defaults to today (UTC).",
+    ),
+]
+
+
+def _resolve_date(value: str | None) -> date:
+    """Parse a logical date, failing with a usable message rather than a stack trace."""
+    if value is None:
+        return datetime.now(tz=UTC).date()
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        typer.echo(f"invalid --date {value!r}; expected YYYY-MM-DD", err=True)
+        raise typer.Exit(code=2) from None
 
 
 @app.callback()
@@ -67,6 +88,147 @@ def doctor(
         raise typer.Exit(code=1)
 
     typer.echo(f"\nAll {len(results)} services healthy.")
+
+
+@app.command(name="list-pipelines")
+def list_pipelines() -> None:
+    """List every registered pipeline, in execution order."""
+    from smart_agri.pipelines import SOIL_SENSOR_STAGES, pipeline_names
+
+    staged = {name for stage in SOIL_SENSOR_STAGES for name in stage}
+
+    for index, stage in enumerate(SOIL_SENSOR_STAGES, start=1):
+        typer.echo(f"stage {index}:")
+        for name in stage:
+            typer.echo(f"  {name}")
+
+    unstaged = sorted(set(pipeline_names()) - staged)
+    if unstaged:
+        typer.echo("\nregistered but not in any stage:")
+        for name in unstaged:
+            typer.echo(f"  {name}")
+
+
+@app.command()
+def run(
+    pipeline: Annotated[str, typer.Argument(help="Pipeline name, e.g. silver.dim_farm.")],
+    logical_date: _DateOption = None,
+) -> None:
+    """Run a single pipeline."""
+    from smart_agri.pipelines import get_pipeline
+
+    target = _resolve_date(logical_date)
+
+    try:
+        job = get_pipeline(pipeline)
+    except KeyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from None
+
+    stats = job.run(target)
+    typer.echo(
+        f"{pipeline}: read={stats.rows_read} written={stats.rows_written} "
+        f"quarantined={stats.rows_quarantined}"
+    )
+
+
+@app.command(name="run-all")
+def run_all(logical_date: _DateOption = None) -> None:
+    """Run the whole soil-sensor slice in dependency order.
+
+    Convenience for local runs and the integration test. Airflow runs the same
+    pipelines as separate tasks so a failure is isolated to one stage.
+    """
+    from smart_agri.pipelines import SOIL_SENSOR_STAGES, PipelineContext, get_pipeline
+
+    target = _resolve_date(logical_date)
+    context = PipelineContext()
+
+    for index, stage in enumerate(SOIL_SENSOR_STAGES, start=1):
+        typer.echo(f"--- stage {index} ---")
+        for name in stage:
+            stats = get_pipeline(name, context).run(target)
+            typer.echo(
+                f"  {name}: read={stats.rows_read} written={stats.rows_written} "
+                f"quarantined={stats.rows_quarantined}"
+            )
+
+    typer.echo("\nsoil-sensor slice complete.")
+
+
+@app.command()
+def seed(
+    profile: Annotated[
+        str, typer.Option("--profile", help="Generator profile: small, medium or large.")
+    ] = "small",
+    seed_value: Annotated[
+        int | None, typer.Option("--seed", help="Override the profile's RNG seed.")
+    ] = None,
+    keep: Annotated[
+        bool,
+        typer.Option("--keep", help="Append instead of truncating the tables first."),
+    ] = False,
+) -> None:
+    """Generate a synthetic dataset and load it into Postgres."""
+    from smart_agri.generator.config import get_profile
+    from smart_agri.generator.seeder import DatasetSeeder
+    from smart_agri.io import PostgresSource
+
+    try:
+        config = get_profile(profile)
+    except KeyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from None
+
+    if seed_value is not None:
+        config = config.model_copy(update={"seed": seed_value})
+
+    typer.echo(
+        f"profile={profile} farms={config.n_farms} sensors={config.n_sensors} "
+        f"window={config.start_date}..{config.end_date} "
+        f"(~{config.estimated_readings:,} readings)"
+    )
+
+    seeder = DatasetSeeder(PostgresSource(get_settings().postgres), config)
+    result = seeder.seed(truncate=not keep)
+
+    typer.echo(
+        f"seeded farms={result.farms} fields={result.fields} "
+        f"sensors={result.sensors} readings={result.readings:,}"
+    )
+
+
+@app.command(name="init-clickhouse")
+def init_clickhouse(
+    ddl_dir: Annotated[
+        str, typer.Option("--ddl-dir", help="Directory of .sql files to apply, in name order.")
+    ] = "/opt/clickhouse/ddl",
+) -> None:
+    """Apply the ClickHouse schema.
+
+    Every statement is written to be idempotent (`CREATE ... IF NOT EXISTS`), so
+    this is safe to re-run on every deploy.
+    """
+    from pathlib import Path
+
+    from smart_agri.io import ClickHouseSink
+
+    root = Path(ddl_dir)
+    if not root.is_dir():
+        typer.echo(f"ddl directory not found: {root}", err=True)
+        raise typer.Exit(code=2)
+
+    files = sorted(root.rglob("*.sql"))
+    if not files:
+        typer.echo(f"no .sql files under {root}", err=True)
+        raise typer.Exit(code=2)
+
+    with ClickHouseSink(get_settings().clickhouse) as sink:
+        for path in files:
+            count = sink.execute_script(path.read_text())
+            typer.echo(f"{path.name}: {count} statement(s)")
+
+    typer.echo(f"\napplied {len(files)} file(s).")
 
 
 if __name__ == "__main__":  # pragma: no cover
