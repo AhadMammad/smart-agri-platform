@@ -19,6 +19,7 @@ from smart_agri.domain import SoilType
 from smart_agri.generator.regions import RainfallPattern
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
     from random import Random
 
@@ -89,6 +90,40 @@ def wetness_index(region: Region, moment: datetime) -> float:
             return 0.72 + 0.08 * math.sin(2 * math.pi * year_fraction)
 
 
+def mean_air_temp_c(region: Region, moment: datetime) -> float:
+    """Daily mean air temperature for a region.
+
+    Deliberately the same seasonal shape the soil model uses, offset warmer and
+    with a larger swing, since air leads soil and varies more. Growing-degree
+    days are accumulated from this, which is what makes yield respond to *when*
+    a crop was grown rather than being drawn at random.
+    """
+    latitude_midpoint = abs((region.lat_min + region.lat_max) / 2)
+    # Calibrated against the regions actually modelled: roughly 27 °C mean in
+    # the Sahel with a small annual swing, and roughly 21 °C on the Maghreb
+    # coast with a larger one. An overstated swing starves winter-sown
+    # Mediterranean cereals of degree-days and makes them all fail.
+    annual_mean = 30.0 - 0.25 * latitude_midpoint
+    amplitude = 2.0 + 0.22 * latitude_midpoint
+    seasonal = amplitude * math.sin(2 * math.pi * (_day_of_year_fraction(moment) - 0.30))
+    return round(annual_mean + seasonal, 2)
+
+
+def rainfall_share(pattern: RainfallPattern) -> float:
+    """Fraction of a crop's water demand that rain typically supplies.
+
+    The complement is what irrigation has to make up, which is what sets the
+    irrigation schedule — and therefore what makes water-use efficiency differ
+    between an Egyptian and a Ghanaian farm.
+    """
+    return {
+        RainfallPattern.IRRIGATED_ARID: 0.05,
+        RainfallPattern.MEDITERRANEAN: 0.55,
+        RainfallPattern.UNIMODAL: 0.70,
+        RainfallPattern.BIMODAL: 0.85,
+    }[pattern]
+
+
 @dataclass(frozen=True, slots=True)
 class SoilProfile:
     """The fixed characteristics of one sensor's location.
@@ -115,12 +150,22 @@ class SoilProfile:
         )
 
 
-def soil_moisture_pct(profile: SoilProfile, region: Region, moment: datetime, rng: Random) -> float:
+def soil_moisture_pct(
+    profile: SoilProfile,
+    region: Region,
+    moment: datetime,
+    rng: Random,
+    irrigation_pct: float = 0.0,
+) -> float:
     """Volumetric soil moisture as a percentage.
 
     Composed of the seasonal wetness curve scaled into the soil's holding band,
-    a mild diurnal dip from daytime evapotranspiration, the sensor's own bias,
-    and noise.
+    a mild diurnal dip from daytime evapotranspiration, whatever recent
+    irrigation is still present, the sensor's own bias, and noise.
+
+    Args:
+        irrigation_pct: Percentage points contributed by recent watering, from
+            `irrigation_boost_pct`. Defaults to zero for a rain-fed field.
     """
     low, high = _MOISTURE_BAND[profile.soil_type]
     seasonal = low + (high - low) * wetness_index(region, moment)
@@ -132,8 +177,42 @@ def soil_moisture_pct(profile: SoilProfile, region: Region, moment: datetime, rn
         2 * math.pi * (_hour_fraction(moment) - PEAK_HEAT_HOUR / 24.0)
     )
 
-    value = seasonal + diurnal + profile.moisture_offset + rng.gauss(0.0, 0.7)
+    value = seasonal + diurnal + irrigation_pct + profile.moisture_offset + rng.gauss(0.0, 0.7)
     return round(min(100.0, max(0.0, value)), 2)
+
+
+# How long an irrigation keeps showing in the profile before it drains and
+# evaporates away. Beyond this the event is dropped from the rolling window.
+IRRIGATION_DECAY_DAYS = 5.0
+
+# Percentage points of volumetric moisture gained per millimetre applied.
+# Roughly 1 mm over a 400 mm root zone, allowing for losses.
+IRRIGATION_GAIN_PCT_PER_MM = 0.22
+
+
+def irrigation_boost_pct(
+    recent_events: Sequence[tuple[datetime, float]], moment: datetime
+) -> float:
+    """Moisture still present from recent irrigation, in percentage points.
+
+    Each event decays exponentially, so a chart shows a sharp rise on the day
+    water was applied followed by a gradual fall — the pattern that makes
+    irrigation events visible in the sensor series at all. Without this
+    coupling, watering a field would leave no trace in its soil-moisture data.
+
+    Args:
+        recent_events: `(timestamp, depth_mm)` pairs, already filtered to the
+            decay window by the caller.
+        moment: When the reading is taken.
+    """
+    total = 0.0
+    for event_ts, depth_mm in recent_events:
+        elapsed_days = (moment - event_ts).total_seconds() / 86_400.0
+        if elapsed_days < 0 or elapsed_days > IRRIGATION_DECAY_DAYS:
+            continue
+        decay = math.exp(-elapsed_days / (IRRIGATION_DECAY_DAYS / 3.0))
+        total += depth_mm * IRRIGATION_GAIN_PCT_PER_MM * decay
+    return total
 
 
 def soil_temperature_c(

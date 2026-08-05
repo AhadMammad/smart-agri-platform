@@ -126,15 +126,16 @@ class TestSeed:
                 from smart_agri.generator.seeder import SeedResult
 
                 seeded.append(truncate)
-                return SeedResult(farms=5, fields=20, sensors=40, readings=28_272)
+                return SeedResult({"farm": 5, "field": 20, "sensor_reading": 28_272})
 
         monkeypatch.setattr("smart_agri.generator.seeder.DatasetSeeder", FakeSeeder)
         result = runner.invoke(app, ["seed", "--profile", "small"])
 
         assert result.exit_code == 0
         assert "profile=small" in result.output
-        assert "readings)" in result.output
-        assert "seeded farms=5" in result.output
+        assert "sensor readings)" in result.output
+        assert "farm" in result.output
+        assert "28,272" in result.output
         assert seeded == [True]
 
     def test_keep_appends_instead_of_truncating(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -148,7 +149,7 @@ class TestSeed:
                 from smart_agri.generator.seeder import SeedResult
 
                 seeded.append(truncate)
-                return SeedResult(1, 1, 1, 1)
+                return SeedResult({"farm": 1})
 
         monkeypatch.setattr("smart_agri.generator.seeder.DatasetSeeder", FakeSeeder)
         runner.invoke(app, ["seed", "--keep"])

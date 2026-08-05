@@ -19,4 +19,11 @@
     <include file="changes/004-sensor-reading.xml" relativeToChangelogFile="true"/>
     <include file="changes/005-etl-control.xml" relativeToChangelogFile="true"/>
 
+    <!-- Phase 3: the full operational model across all four domains -->
+    <include file="changes/006-reference.xml" relativeToChangelogFile="true"/>
+    <include file="changes/007-crop.xml" relativeToChangelogFile="true"/>
+    <include file="changes/008-operations.xml" relativeToChangelogFile="true"/>
+    <include file="changes/009-machinery.xml" relativeToChangelogFile="true"/>
+    <include file="changes/010-imagery.xml" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

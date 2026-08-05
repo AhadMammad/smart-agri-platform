@@ -69,9 +69,9 @@ make run-all                     # Bronze -> Silver -> Gold -> ClickHouse
 make superset-import             # dashboards, charts and datasets from YAML
 ```
 
-`PROFILE` is `small` (5 farms, ~28k readings), `medium` (a full season) or
-`large` (three seasons at 15-minute density). The generator is deterministic:
-the same profile and seed reproduce the same dataset everywhere.
+`PROFILE` is `small` (5 farms, ~186k rows across 15 tables), `medium` (a
+larger estate at hourly resolution) or `large` (three seasons). The generator is
+deterministic: the same profile and seed reproduce the same dataset everywhere.
 
 The same pipelines run in Airflow as the `soil_sensor_daily` DAG — fourteen
 `DockerOperator` tasks in four stages. To run one by hand:
@@ -81,10 +81,32 @@ make pipelines                                    # list them
 make run PIPELINE=silver.dim_farm DATE=2026-08-01
 ```
 
+## The generated dataset
+
 Generated farms sit in real agricultural regions of **North Africa** (Nile
 Delta, Gharb, Cap Bon) and **West Africa** (Kano, Ashanti, Sine-Saloum), each
-with its own rainfall pattern, so soil moisture shows a genuine seasonal cycle
-rather than noise.
+with its own rainfall pattern and crop mix.
+
+Every profile spans a full year, so each crop cycle completes and the yield and
+economics tables are populated. The data is modelled rather than randomised —
+the relationships below are asserted by
+[test_agronomy_model.py](etl/tests/unit/test_agronomy_model.py):
+
+- **Crops are sown into seasons they can finish.** A candidate is only planted
+  if the season banks 85–180% of its degree-day requirement, so cotton goes in
+  in May and durum wheat in November.
+- **Irrigation covers what rain does not** — and deliberately falls short for
+  some fields, which is what makes water genuinely limiting.
+- **Soil moisture rises after watering and decays over ~5 days**, so irrigation
+  is visible in the sensor series rather than sitting in an unrelated table.
+- **NDVI traces canopy development**: bare soil at sowing, a peak around 60% of
+  the cycle, then senescence. Perennials keep an evergreen baseline.
+- **Yield follows water received and degree-days accumulated**, so the wettest
+  half of plantings out-yields the driest.
+- **Machines work the crop calendar** — a combine runs on the day a field is
+  harvested — and emit telemetry densely while working, sparsely while parked.
+- **Costs are derived from what was consumed**: actual inputs, irrigation
+  energy and machine fuel, not drawn independently.
 
 ## Profiles
 
@@ -149,8 +171,8 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 |---|---|---|
 | 1 | Repo foundation and infrastructure | **done** |
 | 2 | Thin end-to-end slice: soil sensor readings | **done** |
-| 3 | Full OLTP schema and data generator | next |
-| 4 | Weather ingestion (Open-Meteo) | |
+| 3 | Full OLTP schema and data generator | **done** |
+| 4 | Weather ingestion (Open-Meteo) | next |
 | 5 | Bronze and Silver for all domains | |
 | 6 | Gold layer and full ClickHouse star schema | |
 | 7 | Superset dashboards as code | |

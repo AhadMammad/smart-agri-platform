@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Farm operations: what was planted, what was applied to it, what water it
+      received, what came off it, and what it cost. Every table carries
+      updated_at so the Phase 5 incremental extractor treats them all alike.
+    -->
+
+    <changeSet id="008-1-planting" author="data-platform">
+        <createTable tableName="planting" schemaName="agri"
+                     remarks="One crop cycle on one field">
+            <column name="planting_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_planting"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_planting_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="variety_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_planting_variety"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="crop_variety"
+                             referencedColumnNames="variety_id"/>
+            </column>
+            <column name="season" type="VARCHAR(20)" remarks="e.g. 2026-main">
+                <constraints nullable="false"/>
+            </column>
+            <column name="planted_on" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_harvest_on" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area_ha" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="seed_rate_kg_ha" type="NUMERIC(8,2)"/>
+            <column name="status" type="VARCHAR(20)" defaultValue="growing">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.planting ADD CONSTRAINT ck_planting_status
+                CHECK (status IN ('growing', 'harvested', 'failed', 'terminated'));
+            ALTER TABLE agri.planting ADD CONSTRAINT ck_planting_dates
+                CHECK (expected_harvest_on &gt; planted_on);
+            ALTER TABLE agri.planting ADD CONSTRAINT ck_planting_area
+                CHECK (area_ha &gt; 0);
+
+            CREATE INDEX ix_planting_field   ON agri.planting (field_id);
+            CREATE INDEX ix_planting_season  ON agri.planting (season);
+            CREATE INDEX ix_planting_updated ON agri.planting (updated_at);
+
+            CREATE TRIGGER trg_planting_touch BEFORE UPDATE ON agri.planting
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="planting" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="008-2-irrigation-event" author="data-platform">
+        <createTable tableName="irrigation_event" schemaName="agri"
+                     remarks="A single application of water to a field">
+            <column name="irrigation_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_irrigation_event"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_irrigation_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <!-- Nullable: a perennial orchard is irrigated outside any discrete
+                 planting cycle. -->
+            <column name="planting_id" type="BIGINT">
+                <constraints foreignKeyName="fk_irrigation_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="event_ts" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="method" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="water_volume_m3" type="NUMERIC(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="depth_mm" type="NUMERIC(8,2)" remarks="Volume normalised by field area">
+                <constraints nullable="false"/>
+            </column>
+            <column name="duration_minutes" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="energy_kwh" type="NUMERIC(10,2)"/>
+            <column name="water_source" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.irrigation_event ADD CONSTRAINT ck_irrigation_method
+                CHECK (method IN ('drip', 'sprinkler', 'furrow', 'flood', 'pivot'));
+            ALTER TABLE agri.irrigation_event ADD CONSTRAINT ck_irrigation_source
+                CHECK (water_source IN ('canal', 'borehole', 'river', 'reservoir', 'rainwater'));
+            ALTER TABLE agri.irrigation_event ADD CONSTRAINT ck_irrigation_volume
+                CHECK (water_volume_m3 &gt; 0 AND depth_mm &gt; 0);
+
+            CREATE INDEX ix_irrigation_field_ts ON agri.irrigation_event (field_id, event_ts);
+            CREATE INDEX ix_irrigation_updated  ON agri.irrigation_event (updated_at);
+
+            CREATE TRIGGER trg_irrigation_touch BEFORE UPDATE ON agri.irrigation_event
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="irrigation_event" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="008-3-input-application" author="data-platform">
+        <createTable tableName="input_application" schemaName="agri"
+                     remarks="Fertiliser, pesticide or herbicide applied to a field">
+            <column name="application_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_input_application"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_application_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="planting_id" type="BIGINT">
+                <constraints foreignKeyName="fk_application_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="applied_on" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="input_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_name" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rate_kg_ha" type="NUMERIC(10,3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity_kg" type="NUMERIC(12,3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_cost_usd_per_kg" type="NUMERIC(10,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_cost_usd" type="NUMERIC(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="application_method" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.input_application ADD CONSTRAINT ck_application_type
+                CHECK (input_type IN ('fertilizer', 'pesticide', 'herbicide', 'fungicide', 'lime'));
+            ALTER TABLE agri.input_application ADD CONSTRAINT ck_application_quantities
+                CHECK (rate_kg_ha &gt; 0 AND quantity_kg &gt; 0 AND total_cost_usd &gt;= 0);
+
+            CREATE INDEX ix_application_field_date ON agri.input_application (field_id, applied_on);
+            CREATE INDEX ix_application_updated    ON agri.input_application (updated_at);
+
+            CREATE TRIGGER trg_application_touch BEFORE UPDATE ON agri.input_application
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="input_application" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="008-4-harvest" author="data-platform">
+        <createTable tableName="harvest" schemaName="agri"
+                     remarks="What came off a planting">
+            <column name="harvest_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_harvest"/>
+            </column>
+            <column name="planting_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_harvest_planting"
+                             foreignKeyName="fk_harvest_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_harvest_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="harvested_on" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area_harvested_ha" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="yield_tonnes" type="NUMERIC(12,3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="yield_t_ha" type="NUMERIC(8,3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="moisture_pct" type="NUMERIC(5,2)"/>
+            <column name="quality_grade" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price_usd_per_tonne" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revenue_usd" type="NUMERIC(14,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.harvest ADD CONSTRAINT ck_harvest_grade
+                CHECK (quality_grade IN ('A', 'B', 'C', 'reject'));
+            ALTER TABLE agri.harvest ADD CONSTRAINT ck_harvest_yield
+                CHECK (yield_tonnes &gt;= 0 AND yield_t_ha &gt;= 0);
+
+            CREATE INDEX ix_harvest_field_date ON agri.harvest (field_id, harvested_on);
+            CREATE INDEX ix_harvest_updated    ON agri.harvest (updated_at);
+
+            CREATE TRIGGER trg_harvest_touch BEFORE UPDATE ON agri.harvest
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="harvest" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="008-5-field-cost" author="data-platform">
+        <createTable tableName="field_cost" schemaName="agri"
+                     remarks="Costs booked against a field, for cost-per-hectare analysis">
+            <column name="cost_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_field_cost"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_cost_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="planting_id" type="BIGINT">
+                <constraints foreignKeyName="fk_cost_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="cost_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost_category" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount_usd" type="NUMERIC(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(200)"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.field_cost ADD CONSTRAINT ck_cost_category
+                CHECK (cost_category IN
+                    ('seed', 'fertilizer', 'crop_protection', 'irrigation',
+                     'fuel', 'labour', 'machinery', 'other'));
+            ALTER TABLE agri.field_cost ADD CONSTRAINT ck_cost_amount
+                CHECK (amount_usd &gt;= 0);
+
+            CREATE INDEX ix_cost_field_date ON agri.field_cost (field_id, cost_date);
+            CREATE INDEX ix_cost_updated    ON agri.field_cost (updated_at);
+
+            CREATE TRIGGER trg_cost_touch BEFORE UPDATE ON agri.field_cost
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="field_cost" schemaName="agri"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

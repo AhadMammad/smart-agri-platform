@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      The machinery fleet and its IoT telemetry.
+
+      `machine_telemetry` is the second high-volume table after sensor_reading,
+      so it is indexed and partition-friendly in the same way.
+    -->
+
+    <changeSet id="009-1-machine" author="data-platform">
+        <createTable tableName="machine" schemaName="agri" remarks="A tractor, harvester or implement">
+            <column name="machine_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_machine"/>
+            </column>
+            <column name="machine_code" type="VARCHAR(32)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_machine_code"/>
+            </column>
+            <column name="farm_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_machine_farm"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="farm"
+                             referencedColumnNames="farm_id"/>
+            </column>
+            <column name="machine_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="manufacturer" type="VARCHAR(60)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model" type="VARCHAR(60)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="year_built" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rated_power_hp" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="purchase_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="engine_hours_at_purchase" type="NUMERIC(10,1)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="active">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.machine ADD CONSTRAINT ck_machine_type
+                CHECK (machine_type IN
+                    ('tractor', 'combine_harvester', 'sprayer', 'planter',
+                     'tillage', 'irrigation_pump', 'telehandler'));
+            ALTER TABLE agri.machine ADD CONSTRAINT ck_machine_status
+                CHECK (status IN ('active', 'maintenance', 'retired'));
+
+            CREATE INDEX ix_machine_farm    ON agri.machine (farm_id);
+            CREATE INDEX ix_machine_updated ON agri.machine (updated_at);
+
+            CREATE TRIGGER trg_machine_touch BEFORE UPDATE ON agri.machine
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="machine" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="009-2-machine-operation" author="data-platform">
+        <createTable tableName="machine_operation" schemaName="agri"
+                     remarks="A machine working a field for a bounded period">
+            <column name="operation_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_machine_operation"/>
+            </column>
+            <column name="machine_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_operation_machine"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="machine"
+                             referencedColumnNames="machine_id"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_operation_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="planting_id" type="BIGINT">
+                <constraints foreignKeyName="fk_operation_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="operation_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="area_covered_ha" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fuel_used_litres" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="distance_km" type="NUMERIC(10,2)"/>
+            <column name="operator_name" type="VARCHAR(80)"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.machine_operation ADD CONSTRAINT ck_operation_type
+                CHECK (operation_type IN
+                    ('tillage', 'planting', 'spraying', 'fertilising',
+                     'harvesting', 'transport', 'mowing'));
+            ALTER TABLE agri.machine_operation ADD CONSTRAINT ck_operation_window
+                CHECK (finished_at &gt; started_at);
+            ALTER TABLE agri.machine_operation ADD CONSTRAINT ck_operation_area
+                CHECK (area_covered_ha &gt; 0 AND fuel_used_litres &gt;= 0);
+
+            CREATE INDEX ix_operation_machine_start ON agri.machine_operation (machine_id, started_at);
+            CREATE INDEX ix_operation_field         ON agri.machine_operation (field_id);
+            CREATE INDEX ix_operation_updated       ON agri.machine_operation (updated_at);
+
+            CREATE TRIGGER trg_operation_touch BEFORE UPDATE ON agri.machine_operation
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="machine_operation" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="009-3-machine-telemetry" author="data-platform">
+        <createTable tableName="machine_telemetry" schemaName="agri"
+                     remarks="IoT telemetry from the fleet">
+            <column name="telemetry_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_machine_telemetry"/>
+            </column>
+            <column name="machine_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_telemetry_machine"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="machine"
+                             referencedColumnNames="machine_id"/>
+            </column>
+            <!-- Nullable: a heartbeat while parked belongs to no operation. -->
+            <column name="operation_id" type="BIGINT">
+                <constraints foreignKeyName="fk_telemetry_operation"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="machine_operation"
+                             referencedColumnNames="operation_id"/>
+            </column>
+            <column name="reading_ts" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="engine_hours" type="NUMERIC(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="engine_running" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_idle" type="BOOLEAN" remarks="Engine on but not working">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fuel_level_pct" type="NUMERIC(5,2)"/>
+            <column name="fuel_rate_l_per_h" type="NUMERIC(8,2)"/>
+            <column name="engine_temp_c" type="NUMERIC(5,2)"/>
+            <column name="engine_rpm" type="INTEGER"/>
+            <column name="speed_kmh" type="NUMERIC(6,2)"/>
+            <column name="latitude" type="NUMERIC(9,6)"/>
+            <column name="longitude" type="NUMERIC(9,6)"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.machine_telemetry ADD CONSTRAINT uq_telemetry_machine_ts
+                UNIQUE (machine_id, reading_ts);
+
+            -- Drives the Phase 5 incremental extract; without it every run scans.
+            CREATE INDEX ix_telemetry_updated    ON agri.machine_telemetry (updated_at);
+            CREATE INDEX ix_telemetry_machine_ts ON agri.machine_telemetry (machine_id, reading_ts);
+
+            CREATE TRIGGER trg_telemetry_touch BEFORE UPDATE ON agri.machine_telemetry
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="machine_telemetry" schemaName="agri"/></rollback>
+    </changeSet>
+
+    <changeSet id="009-4-machine-fault" author="data-platform">
+        <createTable tableName="machine_fault" schemaName="agri"
+                     remarks="Diagnostic trouble codes raised by a machine">
+            <column name="fault_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_machine_fault"/>
+            </column>
+            <column name="machine_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_fault_machine"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="machine"
+                             referencedColumnNames="machine_id"/>
+            </column>
+            <column name="occurred_at" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fault_code" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="severity" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Null while the fault is still open, which is what a
+                 maintenance-due signal keys off. -->
+            <column name="resolved_at" type="TIMESTAMPTZ"/>
+            <column name="downtime_hours" type="NUMERIC(8,2)"/>
+            <column name="repair_cost_usd" type="NUMERIC(12,2)"/>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.machine_fault ADD CONSTRAINT ck_fault_severity
+                CHECK (severity IN ('info', 'warning', 'critical'));
+            ALTER TABLE agri.machine_fault ADD CONSTRAINT ck_fault_resolution
+                CHECK (resolved_at IS NULL OR resolved_at &gt;= occurred_at);
+
+            CREATE INDEX ix_fault_machine_time ON agri.machine_fault (machine_id, occurred_at);
+            CREATE INDEX ix_fault_updated      ON agri.machine_fault (updated_at);
+
+            CREATE TRIGGER trg_fault_touch BEFORE UPDATE ON agri.machine_fault
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="machine_fault" schemaName="agri"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

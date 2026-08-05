@@ -184,18 +184,17 @@ def seed(
         config = config.model_copy(update={"seed": seed_value})
 
     typer.echo(
-        f"profile={profile} farms={config.n_farms} sensors={config.n_sensors} "
+        f"profile={profile} farms={config.n_farms} fields={config.n_fields} "
+        f"sensors={config.n_sensors} machines={config.n_machines}\n"
         f"window={config.start_date}..{config.end_date} "
-        f"(~{config.estimated_readings:,} readings)"
+        f"(~{config.estimated_readings:,} sensor readings)"
     )
 
     seeder = DatasetSeeder(PostgresSource(get_settings().postgres), config)
     result = seeder.seed(truncate=not keep)
 
-    typer.echo(
-        f"seeded farms={result.farms} fields={result.fields} "
-        f"sensors={result.sensors} readings={result.readings:,}"
-    )
+    typer.echo("\nseeded:")
+    typer.echo(result.summary())
 
 
 @app.command(name="init-clickhouse")

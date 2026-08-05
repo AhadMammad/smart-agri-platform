@@ -143,6 +143,39 @@ reach.
 The one materialized view that does exist — `mv_field_soil_weekly` — only rolls
 the already-tested daily aggregate up to weeks.
 
+### The reference catalogue lives twice, and is checked
+
+Regions, soil classes and crops exist as Python constants *and* as INSERT
+statements in the Liquibase changelogs. The generator needs them without a
+database; the database needs them before `farm.region` can carry a foreign key
+onto `agri.region`.
+
+That duplication is guarded by `tests/unit/test_reference_catalogue.py`, which
+parses the changelogs and compares them field by field. Without it, a base
+temperature edited on one side would skew every yield in the dataset while every
+other test still passed — the same failure mode the DAG/registry sync test
+exists to prevent.
+
+### Generation order is the design
+
+`DatasetGenerator.build()` runs its sub-generators in dependency order, and the
+order is what makes the data internally consistent rather than fifteen
+independent random tables:
+
+```
+plantings ──► irrigation ──► machine work ──► harvest ──► costs
+     │             │                              ▲          ▲
+     └─► imagery   └──────► sensor readings       │          │
+                            (moisture boost)      │          │
+                     water received ──────────────┘          │
+                     fuel + inputs + energy ─────────────────┘
+```
+
+A planting fixes the crop, the calendar and the water demand. Everything
+downstream derives from it, so water-use efficiency, cost per hectare and yield
+are related quantities instead of three unrelated series that happen to share a
+field id.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:

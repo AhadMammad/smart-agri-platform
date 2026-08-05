@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      The crop catalogue.
+
+      `base_temp_c` and `gdd_to_maturity` drive growing-degree-day accumulation,
+      which is what makes yield respond to weather rather than being drawn at
+      random. `water_demand_mm` sets the irrigation schedule.
+    -->
+
+    <changeSet id="007-1-crop" author="data-platform">
+        <createTable tableName="crop" schemaName="agri" remarks="Cultivated crop species">
+            <column name="crop_code" type="VARCHAR(30)">
+                <constraints primaryKey="true" primaryKeyName="pk_crop"/>
+            </column>
+            <column name="name" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(40)" remarks="cereal, legume, tree_crop, ...">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_perennial" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Growth below this temperature contributes no degree-days. -->
+            <column name="base_temp_c" type="NUMERIC(4,1)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gdd_to_maturity" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cycle_days" type="SMALLINT" remarks="Typical planting-to-harvest span">
+                <constraints nullable="false"/>
+            </column>
+            <column name="water_demand_mm" type="INTEGER" remarks="Seasonal requirement">
+                <constraints nullable="false"/>
+            </column>
+            <column name="peak_ndvi" type="NUMERIC(4,3)" remarks="Canopy vigour at full cover">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            INSERT INTO agri.crop
+                (crop_code, name, category, is_perennial, base_temp_c,
+                 gdd_to_maturity, cycle_days, water_demand_mm, peak_ndvi)
+            VALUES
+                -- North Africa
+                ('durum_wheat', 'Durum wheat', 'cereal',    false,  4.0, 1900, 150,  450, 0.780),
+                ('wheat',       'Wheat',       'cereal',    false,  4.0, 1800, 145,  430, 0.790),
+                ('cotton',      'Cotton',      'fibre',     false, 15.0, 2400, 175,  800, 0.760),
+                ('rice',        'Rice',        'cereal',    false, 10.0, 2100, 140, 1200, 0.810),
+                ('tomato',      'Tomato',      'vegetable', false, 10.0, 1500, 110,  600, 0.820),
+                ('sugar_beet',  'Sugar beet',  'root',      false,  3.0, 2200, 180,  650, 0.850),
+                ('olive',       'Olive',       'tree_crop', true,   8.0, 2800, 365,  500, 0.700),
+                ('citrus',      'Citrus',      'tree_crop', true,  12.5, 3000, 365,  900, 0.740),
+                ('date_palm',   'Date palm',   'tree_crop', true,  10.0, 3400, 365, 1800, 0.650),
+                -- West Africa
+                ('maize',       'Maize',       'cereal',    false, 10.0, 1600, 120,  550, 0.830),
+                ('sorghum',     'Sorghum',     'cereal',    false, 10.0, 1700, 130,  450, 0.760),
+                ('millet',      'Millet',      'cereal',    false, 10.0, 1400, 100,  350, 0.720),
+                ('groundnut',   'Groundnut',   'legume',    false, 10.0, 1500, 115,  500, 0.780),
+                ('cowpea',      'Cowpea',      'legume',    false, 11.0, 1300,  90,  350, 0.750),
+                ('cassava',     'Cassava',     'root',      false, 12.0, 3200, 330,  700, 0.800),
+                ('rice_upland', 'Upland rice', 'cereal',    false, 10.0, 1900, 125,  900, 0.790),
+                ('cocoa',       'Cocoa',       'tree_crop', true,  15.0, 3600, 365, 1500, 0.860),
+                ('oil_palm',    'Oil palm',    'tree_crop', true,  15.0, 3800, 365, 1700, 0.880);
+
+            ALTER TABLE agri.crop ADD CONSTRAINT ck_crop_gdd_positive
+                CHECK (gdd_to_maturity &gt; 0);
+            ALTER TABLE agri.crop ADD CONSTRAINT ck_crop_peak_ndvi
+                CHECK (peak_ndvi BETWEEN 0 AND 1);
+        </sql>
+
+        <rollback>
+            <dropTable tableName="crop" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="007-2-crop-variety" author="data-platform">
+        <createTable tableName="crop_variety" schemaName="agri"
+                     remarks="Named cultivars, each with its own maturity and yield potential">
+            <column name="variety_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_crop_variety"/>
+            </column>
+            <column name="variety_code" type="VARCHAR(40)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_variety_code"/>
+            </column>
+            <column name="crop_code" type="VARCHAR(30)">
+                <constraints nullable="false"
+                             foreignKeyName="fk_variety_crop"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="crop"
+                             referencedColumnNames="crop_code"/>
+            </column>
+            <column name="name" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="maturity_days" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="yield_potential_t_ha" type="NUMERIC(6,2)"
+                    remarks="Attainable yield under non-limiting conditions">
+                <constraints nullable="false"/>
+            </column>
+            <column name="drought_tolerance" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            CREATE INDEX ix_variety_crop ON agri.crop_variety (crop_code);
+            ALTER TABLE agri.crop_variety ADD CONSTRAINT ck_variety_yield_positive
+                CHECK (yield_potential_t_ha &gt; 0);
+            ALTER TABLE agri.crop_variety ADD CONSTRAINT ck_variety_drought
+                CHECK (drought_tolerance IN ('low', 'moderate', 'high'));
+        </sql>
+
+        <rollback>
+            <dropTable tableName="crop_variety" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

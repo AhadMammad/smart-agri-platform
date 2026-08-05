@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Reference catalogues.
+
+      The rows are inserted here rather than by the seeder because `farm.region`
+      and `field.soil_type` gain foreign keys onto them at the end of this file:
+      the referenced rows must exist before the constraint can validate against
+      data an earlier phase already loaded.
+
+      `smart_agri.generator` holds the same catalogue in Python, since the
+      generator needs it without a database. The two are kept in step by
+      tests/unit/test_reference_catalogue.py, which parses this file.
+    -->
+
+    <changeSet id="006-1-region" author="data-platform">
+        <createTable tableName="region" schemaName="agri"
+                     remarks="Farming regions the platform covers">
+            <column name="region_code" type="VARCHAR(20)">
+                <constraints primaryKey="true" primaryKeyName="pk_region"/>
+            </column>
+            <column name="name" type="VARCHAR(80)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_region_name"/>
+            </column>
+            <column name="country_code" type="CHAR(2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="country_name" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="macro_region" type="VARCHAR(40)" remarks="North Africa / West Africa">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rainfall_pattern" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            INSERT INTO agri.region
+                (region_code, name, country_code, country_name, macro_region, rainfall_pattern)
+            VALUES
+                ('EG-DELTA',   'Nile Delta',   'EG', 'Egypt',         'North Africa', 'irrigated_arid'),
+                ('MA-GHARB',   'Gharb Plain',  'MA', 'Morocco',       'North Africa', 'mediterranean'),
+                ('TN-CAPBON',  'Cap Bon',      'TN', 'Tunisia',       'North Africa', 'mediterranean'),
+                ('NG-KANO',    'Kano Plains',  'NG', 'Nigeria',       'West Africa',  'unimodal'),
+                ('GH-ASHANTI', 'Ashanti Belt', 'GH', 'Ghana',         'West Africa',  'bimodal'),
+                ('SN-SALOUM',  'Sine-Saloum',  'SN', 'Senegal',       'West Africa',  'unimodal');
+        </sql>
+
+        <rollback>
+            <dropTable tableName="region" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="006-2-soil-type" author="data-platform">
+        <createTable tableName="soil_type" schemaName="agri"
+                     remarks="Soil classes and their water-holding behaviour">
+            <column name="soil_code" type="VARCHAR(20)">
+                <constraints primaryKey="true" primaryKeyName="pk_soil_type"/>
+            </column>
+            <column name="name" type="VARCHAR(60)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The plausible volumetric moisture band for this class. The
+                 generator scales its seasonal curve into it, and Phase 6 will
+                 use it to make the stress thresholds soil-aware. -->
+            <column name="moisture_min_pct" type="NUMERIC(5,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="moisture_max_pct" type="NUMERIC(5,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="drainage" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            INSERT INTO agri.soil_type
+                (soil_code, name, moisture_min_pct, moisture_max_pct, drainage)
+            VALUES
+                ('sandy',      'Sandy',      6.00,  22.00, 'rapid'),
+                ('sandy_loam', 'Sandy loam', 10.00, 28.00, 'well'),
+                ('loamy',      'Loamy',      14.00, 34.00, 'well'),
+                ('silt',       'Silt',       16.00, 36.00, 'moderate'),
+                ('clay_loam',  'Clay loam',  18.00, 40.00, 'slow'),
+                ('clay',       'Clay',       22.00, 45.00, 'poor');
+
+            ALTER TABLE agri.soil_type ADD CONSTRAINT ck_soil_moisture_band
+                CHECK (moisture_min_pct &lt; moisture_max_pct);
+        </sql>
+
+        <rollback>
+            <dropTable tableName="soil_type" schemaName="agri"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="006-3-link-farm-and-field" author="data-platform">
+        <comment>
+            Point the existing text columns at the new catalogues. Safe against
+            data loaded in Phase 2 because the reference rows above use exactly
+            the values the generator already wrote.
+        </comment>
+        <sql>
+            ALTER TABLE agri.farm ADD CONSTRAINT fk_farm_region
+                FOREIGN KEY (region) REFERENCES agri.region (name);
+            ALTER TABLE agri.field ADD CONSTRAINT fk_field_soil_type
+                FOREIGN KEY (soil_type) REFERENCES agri.soil_type (soil_code);
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE agri.farm DROP CONSTRAINT fk_farm_region;
+                ALTER TABLE agri.field DROP CONSTRAINT fk_field_soil_type;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

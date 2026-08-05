@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Vegetation indices derived from satellite and drone imagery.
+
+      Derived values only — no rasters. Storing GeoTIFFs would add a binary
+      store and a GDAL dependency to the ETL image for no analytical gain: every
+      question the dashboards ask is answered by the per-field index series.
+    -->
+
+    <changeSet id="010-1-field-index-observation" author="data-platform">
+        <createTable tableName="field_index_observation" schemaName="agri"
+                     remarks="One imagery pass over one field">
+            <column name="observation_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_field_index_observation"/>
+            </column>
+            <column name="field_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_observation_field"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="field"
+                             referencedColumnNames="field_id"/>
+            </column>
+            <column name="planting_id" type="BIGINT">
+                <constraints foreignKeyName="fk_observation_planting"
+                             referencedTableSchemaName="agri"
+                             referencedTableName="planting"
+                             referencedColumnNames="planting_id"/>
+            </column>
+            <column name="observed_on" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="platform" type="VARCHAR(40)" remarks="e.g. Sentinel-2, DJI Mavic 3M"/>
+            <!-- Nullable: a cloudy satellite pass yields no usable index. -->
+            <column name="ndvi" type="NUMERIC(5,4)" remarks="Normalised difference vegetation index"/>
+            <column name="ndwi" type="NUMERIC(5,4)" remarks="Normalised difference water index"/>
+            <column name="evi" type="NUMERIC(5,4)" remarks="Enhanced vegetation index"/>
+            <column name="cloud_cover_pct" type="NUMERIC(5,2)"/>
+            <column name="resolution_m" type="NUMERIC(6,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="usable" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE agri.field_index_observation ADD CONSTRAINT ck_observation_source
+                CHECK (source IN ('satellite', 'drone', 'aerial'));
+
+            -- Indices are physically bounded to [-1, 1]; a value outside that is
+            -- a broken pipeline, not a stressed crop.
+            ALTER TABLE agri.field_index_observation ADD CONSTRAINT ck_observation_ndvi
+                CHECK (ndvi IS NULL OR ndvi BETWEEN -1 AND 1);
+            ALTER TABLE agri.field_index_observation ADD CONSTRAINT ck_observation_ndwi
+                CHECK (ndwi IS NULL OR ndwi BETWEEN -1 AND 1);
+            ALTER TABLE agri.field_index_observation ADD CONSTRAINT ck_observation_evi
+                CHECK (evi IS NULL OR evi BETWEEN -1 AND 1);
+
+            ALTER TABLE agri.field_index_observation ADD CONSTRAINT uq_observation_field_date_source
+                UNIQUE (field_id, observed_on, source);
+
+            CREATE INDEX ix_observation_field_date
+                ON agri.field_index_observation (field_id, observed_on);
+            CREATE INDEX ix_observation_updated
+                ON agri.field_index_observation (updated_at);
+
+            CREATE TRIGGER trg_observation_touch BEFORE UPDATE ON agri.field_index_observation
+                FOR EACH ROW EXECUTE FUNCTION agri.touch_updated_at();
+        </sql>
+
+        <rollback><dropTable tableName="field_index_observation" schemaName="agri"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

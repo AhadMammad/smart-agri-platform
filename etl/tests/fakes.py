@@ -140,13 +140,28 @@ class FakePostgresSource:
 
     @staticmethod
     def _identity_column(table: str) -> str | None:
-        """`agri.sensor_reading` -> `reading_id`, matching the real schema."""
+        """`agri.sensor_reading` -> `reading_id`, matching the real schema.
+
+        Every table the seeder writes needs an entry: a missing one silently
+        skips key assignment and the next level's foreign-key lookup fails.
+        """
         leaf = table.split(".")[-1]
         return {
+            "crop_variety": "variety_id",
             "farm": "farm_id",
             "field": "field_id",
             "sensor": "sensor_id",
             "sensor_reading": "reading_id",
+            "planting": "planting_id",
+            "irrigation_event": "irrigation_id",
+            "input_application": "application_id",
+            "harvest": "harvest_id",
+            "field_cost": "cost_id",
+            "machine": "machine_id",
+            "machine_operation": "operation_id",
+            "machine_telemetry": "telemetry_id",
+            "machine_fault": "fault_id",
+            "field_index_observation": "observation_id",
         }.get(leaf)
 
     def truncate(self, tables: Iterable[str]) -> None:
