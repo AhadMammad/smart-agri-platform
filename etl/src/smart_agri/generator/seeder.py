@@ -365,7 +365,27 @@ class DatasetSeeder:
             .replace_strict(operation_ids, default=None, return_dtype=pl.Int64)
             .alias("operation_id"),
         )
-        return self._copy(resolved, "agri.machine_telemetry")
+        # Select explicitly: `machine_code` and `operation_key` are the natural
+        # keys used for the lookup above and have no column in the table, so
+        # copying the whole frame fails with "column does not exist".
+        return self._copy(
+            resolved.select(
+                "machine_id",
+                "operation_id",
+                "reading_ts",
+                "engine_hours",
+                "engine_running",
+                "is_idle",
+                "fuel_level_pct",
+                "fuel_rate_l_per_h",
+                "engine_temp_c",
+                "engine_rpm",
+                "speed_kmh",
+                "latitude",
+                "longitude",
+            ),
+            "agri.machine_telemetry",
+        )
 
     def _insert_faults(self, dataset: Dataset, machine_ids: dict[str, int]) -> int:
         frame = pl.DataFrame(

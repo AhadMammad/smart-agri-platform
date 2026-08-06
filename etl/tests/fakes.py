@@ -85,6 +85,9 @@ class FakePostgresSource:
         self.tables = tables or {}
         self.queries: list[tuple[str, Sequence[Any] | None]] = []
         self.copied: list[tuple[str, int]] = []
+        #: (table, columns) for every insert, so a test can check the
+        #: seeder only writes columns the real schema actually has.
+        self.copied_columns: list[tuple[str, tuple[str, ...]]] = []
         self.truncated: list[str] = []
 
     def read_query(self, sql: str, params: Sequence[Any] | None = None) -> pl.DataFrame:
@@ -121,6 +124,7 @@ class FakePostgresSource:
         A fake that skipped this would make that whole mechanism untested.
         """
         self.copied.append((table, frame.height))
+        self.copied_columns.append((table, tuple(columns)))
         selected = frame.select(columns)
 
         identity = self._identity_column(table)
