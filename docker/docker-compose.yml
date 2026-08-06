@@ -144,11 +144,30 @@ services:
     <<: *hadoop-common
     profiles: [core, orchestration]
     hostname: namenode
-    command: ["hdfs", "namenode"]
-    environment:
-      # The image formats the NameNode only when this directory is absent, so a
-      # populated volume is never reformatted. This is the sentinel guard.
-      ENSURE_NAMENODE_DIR: /hadoop/dfs/name
+    # Format once, then run.
+    #
+    # The image's own ENSURE_NAMENODE_DIR hook is useless here: it formats only
+    # when the *directory* is missing, and the volume mount creates that
+    # directory before the container starts. The guard was defeated by the very
+    # volume it was meant to protect, and the NameNode crash-looped with
+    # "NameNode is not formatted".
+    #
+    # `current/VERSION` is the real sentinel — HDFS writes it during format and
+    # never without one. `-nonInteractive` is the second line of defence: if the
+    # directory somehow *is* formatted, the command aborts rather than prompting
+    # or silently wiping the lake.
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        if [ ! -f /hadoop/dfs/name/current/VERSION ]; then
+          echo "namenode storage is empty — formatting once"
+          hdfs namenode -format -nonInteractive
+        else
+          echo "namenode already formatted — leaving it alone"
+        fi
+        exec hdfs namenode
     ports:
       - "${HDFS_NAMENODE_HTTP_HOST_PORT}:9870"
     volumes:
