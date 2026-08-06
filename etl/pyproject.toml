@@ -116,7 +116,13 @@ pretty = true
 
 [[tool.mypy.overrides]]
 # These ship without complete stubs; we still type our own call sites.
-module = ["pandera.*", "clickhouse_connect.*", "adbc_driver_postgresql.*", "fsspec.*"]
+module = [
+    "pandera.*",
+    "clickhouse_connect.*",
+    "adbc_driver_postgresql.*",
+    "fsspec.*",
+    "pyarrow.*",
+]
 ignore_missing_imports = true
 
 # =============================================================================

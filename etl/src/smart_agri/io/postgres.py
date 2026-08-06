@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import psycopg
+import pyarrow as pa
 
 from smart_agri.utils import get_logger
 
@@ -25,6 +26,65 @@ if TYPE_CHECKING:
     from smart_agri.config import PostgresSettings
 
 logger = get_logger(__name__)
+
+#: Postgres types the driver hands back wrapped in an Arrow extension, mapped to
+#: the Arrow type the rest of the platform expects.
+_EXTENSION_TARGETS: dict[str, pa.DataType] = {
+    "numeric": pa.float64(),
+}
+
+
+def normalise_arrow(table: pa.Table) -> pa.Table:
+    """Unwrap driver extension types that Polars cannot ingest.
+
+    ADBC returns Postgres `NUMERIC` as `arrow.opaque` wrapping a string, and
+    `pl.from_arrow` rejects it outright:
+
+        ComputeError: cannot create series from
+        Extension("arrow.opaque", Utf8, {"type_name":"numeric",...})
+
+    Nearly every table has a NUMERIC column — coordinates, areas, every
+    measurement — so without this no extract works at all. The storage array is
+    unwrapped and cast to the type the contracts declare.
+
+    Note `BaseExtensionType`, not `ExtensionType`: driver-supplied types are
+    defined in C++ and derive from the base class only, so checking the
+    Python subclass silently matches nothing.
+    """
+    if not any(isinstance(field.type, pa.BaseExtensionType) for field in table.schema):
+        return table
+
+    columns: list[pa.ChunkedArray] = []
+    fields: list[pa.Field] = []
+
+    for field, column in zip(table.schema, table.columns, strict=True):
+        if not isinstance(field.type, pa.BaseExtensionType):
+            columns.append(column)
+            fields.append(field)
+            continue
+
+        storage = pa.chunked_array(
+            [chunk.storage for chunk in column.chunks], type=field.type.storage_type
+        )
+        target = _EXTENSION_TARGETS.get(_extension_name(field.type))
+        decoded = storage.cast(target) if target is not None else storage
+
+        columns.append(decoded)
+        fields.append(pa.field(field.name, decoded.type, nullable=field.nullable))
+        logger.debug("arrow_extension_decoded", column=field.name, target=str(decoded.type))
+
+    return pa.Table.from_arrays(columns, schema=pa.schema(fields))
+
+
+def _extension_name(extension: pa.BaseExtensionType) -> str:
+    """The vendor type name carried in an opaque extension, lowercased.
+
+    `pa.OpaqueType` exposes it directly; anything else falls back to the
+    extension name so an unknown type passes through as its storage type
+    rather than raising.
+    """
+    name = getattr(extension, "type_name", None)
+    return str(name).lower() if name else str(extension.extension_name).lower()
 
 
 class PostgresSource:
@@ -47,7 +107,7 @@ class PostgresSource:
             cur.execute(sql, parameters=list(params) if params else None)
             table = cur.fetch_arrow_table()
 
-        frame = pl.from_arrow(table)
+        frame = pl.from_arrow(normalise_arrow(table))
         result = frame if isinstance(frame, pl.DataFrame) else frame.to_frame()
         logger.debug("postgres_read", rows=result.height, columns=result.width)
         return result
