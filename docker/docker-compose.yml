@@ -303,8 +303,18 @@ services:
     <<: *airflow-common
     profiles: [orchestration]
     restart: "no"
-    entrypoint: /bin/bash
+    # The entrypoint is deliberately NOT overridden.
+    #
+    # Containers run as ${AIRFLOW_UID}, which is the host user's id and does not
+    # exist inside the image. The image's entrypoint adds it to /etc/passwd
+    # (which is why group 0 is required); bypassing that with
+    # `entrypoint: /bin/bash` makes every Airflow command die with
+    # "The user that Airflow is running as has no username".
+    #
+    # The entrypoint special-cases a `bash` command and execs it, so passing the
+    # script as the command still runs it — after the fixup.
     command:
+      - bash
       - -c
       - |
         set -euo pipefail
