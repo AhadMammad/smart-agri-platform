@@ -1,10 +1,25 @@
 # Weekly rainfall less evapotranspiration; negative bars are weeks the crop drew down stored water
 slice_name: Water balance by region
-description: Weekly rainfall less evapotranspiration; negative bars are weeks the crop drew down stored water
+description: Weekly rainfall less evapotranspiration; negative bars are weeks the crop drew down stored
+  water
 certified_by: null
 certification_details: null
 viz_type: echarts_timeseries_bar
-params: '{"datasource": "8376e30c-86f7-5f53-82d5-a413a448a39e__table", "granularity_sqla": "observation_date", "time_range": "No filter", "row_limit": 10000, "x_axis": "observation_date", "time_grain_sqla": "P1W", "viz_type": "echarts_timeseries_bar", "metrics": ["net_water_balance"], "groupby": ["region"], "stack": null, "y_axis_title": "Rainfall less ET0 (mm)", "show_legend": true}'
+params:
+  datasource: 8376e30c-86f7-5f53-82d5-a413a448a39e__table
+  granularity_sqla: observation_date
+  time_range: No filter
+  row_limit: 10000
+  x_axis: observation_date
+  time_grain_sqla: P1W
+  viz_type: echarts_timeseries_bar
+  metrics:
+  - net_water_balance
+  groupby:
+  - region
+  stack: null
+  y_axis_title: Rainfall less ET0 (mm)
+  show_legend: true
 query_context: null
 cache_timeout: null
 uuid: 41fab93f-8ed3-5b0a-a291-71bcbb03628c

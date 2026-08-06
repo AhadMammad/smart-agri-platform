@@ -81,21 +81,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Superset YAML parses, and chart params are valid JSON
+      - name: Superset YAML parses, and chart params are mappings
         run: |
           python -m pip install --quiet pyyaml
           python - <<'PY'
-          import json, pathlib, sys, yaml
+          import pathlib, sys, yaml
 
           root = pathlib.Path("superset/assets")
           failures = []
           for path in sorted(root.rglob("*.yaml")):
               try:
                   doc = yaml.safe_load(path.read_text())
-                  # A chart's `params` is a JSON document embedded in a YAML
-                  # string; a syntax error there only surfaces at import time.
+                  # Superset's v1 importer requires `params` to be a nested
+                  # mapping. A JSON-encoded string parses as valid YAML but is
+                  # rejected at import with "Not a valid mapping type".
                   if path.parent.name == "charts":
-                      json.loads(doc["params"])
+                      assert isinstance(doc["params"], dict), (
+                          f"{path}: params must be a mapping, not "
+                          f"{type(doc['params']).__name__}"
+                      )
               except Exception as exc:  # noqa: BLE001
                   failures.append(f"{path}: {exc}")
 

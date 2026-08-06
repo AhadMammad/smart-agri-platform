@@ -4,7 +4,20 @@ description: Heat units banked by each field over the season, the driver behind 
 certified_by: null
 certification_details: null
 viz_type: echarts_timeseries_line
-params: '{"datasource": "8376e30c-86f7-5f53-82d5-a413a448a39e__table", "granularity_sqla": "observation_date", "time_range": "No filter", "row_limit": 10000, "x_axis": "observation_date", "time_grain_sqla": "P1D", "viz_type": "echarts_timeseries_line", "metrics": ["peak_gdd"], "groupby": ["field_code"], "y_axis_title": "Growing-degree days (base 10 C)", "show_legend": true}'
+params:
+  datasource: 8376e30c-86f7-5f53-82d5-a413a448a39e__table
+  granularity_sqla: observation_date
+  time_range: No filter
+  row_limit: 10000
+  x_axis: observation_date
+  time_grain_sqla: P1D
+  viz_type: echarts_timeseries_line
+  metrics:
+  - peak_gdd
+  groupby:
+  - field_code
+  y_axis_title: Growing-degree days (base 10 C)
+  show_legend: true
 query_context: null
 cache_timeout: null
 uuid: c8ccee63-ac3f-51f6-9d94-0ac684e6fea5

@@ -1,10 +1,33 @@
 # Daily rainfall as bars against measured soil moisture as a line; moisture should rise after rain
 slice_name: Rainfall vs soil moisture
-description: Daily rainfall as bars against measured soil moisture as a line; moisture should rise after rain
+description: Daily rainfall as bars against measured soil moisture as a line; moisture should rise after
+  rain
 certified_by: null
 certification_details: null
 viz_type: mixed_timeseries
-params: '{"datasource": "8376e30c-86f7-5f53-82d5-a413a448a39e__table", "granularity_sqla": "observation_date", "time_range": "No filter", "row_limit": 10000, "x_axis": "observation_date", "time_grain_sqla": "P1D", "viz_type": "mixed_timeseries", "metrics": ["total_rainfall"], "groupby": [], "metrics_b": ["avg_moisture"], "groupby_b": [], "yAxisIndex": 0, "yAxisIndexB": 1, "seriesType": "bar", "seriesTypeB": "line", "y_axis_title": "Rainfall (mm)", "y_axis_title_secondary": "Soil moisture (%)", "x_axis_title": "Date", "show_legend": true, "truncateYAxis": false}'
+params:
+  datasource: 8376e30c-86f7-5f53-82d5-a413a448a39e__table
+  granularity_sqla: observation_date
+  time_range: No filter
+  row_limit: 10000
+  x_axis: observation_date
+  time_grain_sqla: P1D
+  viz_type: mixed_timeseries
+  metrics:
+  - total_rainfall
+  groupby: []
+  metrics_b:
+  - avg_moisture
+  groupby_b: []
+  yAxisIndex: 0
+  yAxisIndexB: 1
+  seriesType: bar
+  seriesTypeB: line
+  y_axis_title: Rainfall (mm)
+  y_axis_title_secondary: Soil moisture (%)
+  x_axis_title: Date
+  show_legend: true
+  truncateYAxis: false
 query_context: null
 cache_timeout: null
 uuid: d10e819f-8c7d-5463-8856-24ab0a275a5d

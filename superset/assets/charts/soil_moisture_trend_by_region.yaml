@@ -4,7 +4,23 @@ description: Daily mean volumetric soil moisture, split by growing region
 certified_by: null
 certification_details: null
 viz_type: echarts_timeseries_line
-params: '{"datasource": "5da48fcf-262a-535f-9c69-cf82dcc22632__table", "granularity_sqla": "reading_date", "time_range": "No filter", "row_limit": 10000, "viz_type": "echarts_timeseries_line", "x_axis": "reading_date", "time_grain_sqla": "P1D", "metrics": ["avg_moisture"], "groupby": ["region"], "comparison_type": "values", "y_axis_format": ",.1f", "x_axis_title": "Date", "y_axis_title": "Soil moisture (%)", "show_legend": true}'
+params:
+  datasource: 5da48fcf-262a-535f-9c69-cf82dcc22632__table
+  granularity_sqla: reading_date
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_line
+  x_axis: reading_date
+  time_grain_sqla: P1D
+  metrics:
+  - avg_moisture
+  groupby:
+  - region
+  comparison_type: values
+  y_axis_format: ',.1f'
+  x_axis_title: Date
+  y_axis_title: Soil moisture (%)
+  show_legend: true
 query_context: null
 cache_timeout: null
 uuid: e5d2a9bc-ad1c-5e5c-8b80-cdfdec46d443
