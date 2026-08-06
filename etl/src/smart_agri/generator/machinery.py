@@ -96,6 +96,12 @@ _FAULT_CATALOGUE: tuple[tuple[str, FaultSeverity, str], ...] = (
 # Share of the fleet in each non-working state at any moment.
 _RETIRED_SHARE = 0.05
 _MAINTENANCE_SHARE = 0.15
+# No single operation runs longer than a working day. Without a cap a very
+# large field produces a twenty-hour shift that overruns into the next
+# morning's parked heartbeat.
+_MAX_OPERATION_HOURS = 10.0
+# A machine needs turnaround between jobs.
+_TURNAROUND_MINUTES = 30
 # Roughly one telemetry sample in eight is a headland turn or a pause.
 _IDLE_SAMPLE_SHARE = 0.12
 # Below this the operator refuels before the next job.
@@ -221,20 +227,35 @@ class MachineryGenerator:
             if machine.status is not MachineStatus.RETIRED:
                 by_farm.setdefault(machine.farm_code, []).append(machine)
 
-        records: list[OperationRecord] = []
+        # Every candidate is collected first and assigned in chronological
+        # order. Scheduling plan by plan would hand the same machine two fields
+        # on the same morning — physically impossible, and it produced duplicate
+        # telemetry that violated uq_telemetry_machine_ts.
+        candidates: list[tuple[date, str, OperationType, PlantingPlan, str]] = []
         for plan in plans:
             farm_code = plan.planting.field_code.rsplit("-F", 1)[0]
-            fleet = by_farm.get(farm_code)
-            if not fleet:
+            if farm_code not in by_farm:
                 continue
 
             for operation_type, offset_days in self._schedule(plan):
                 work_day = plan.planting.planted_on + timedelta(days=offset_days)
                 if not (self._config.start_date <= work_day <= self._config.end_date):
                     continue
+                candidates.append((work_day, plan.key, operation_type, plan, farm_code))
 
-                machine = self._pick_machine(fleet, operation_type)
-                records.append(self._build_operation(plan, machine, operation_type, work_day))
+        # Sorted on the work day plus stable tiebreaks, so the assignment — and
+        # therefore every downstream RNG draw — stays deterministic.
+        candidates.sort(key=lambda item: (item[0], item[1], item[2].value))
+
+        free_at: dict[str, datetime] = {}
+        records: list[OperationRecord] = []
+        for work_day, _key, operation_type, plan, farm_code in candidates:
+            machine = self._pick_machine(by_farm[farm_code], operation_type)
+            record = self._build_operation(plan, machine, operation_type, work_day, free_at)
+            free_at[machine.machine_code] = record.operation.finished_at + timedelta(
+                minutes=_TURNAROUND_MINUTES
+            )
+            records.append(record)
 
         return records
 
@@ -272,11 +293,14 @@ class MachineryGenerator:
         machine: Machine,
         operation_type: OperationType,
         work_day: date,
+        free_at: dict[str, datetime] | None = None,
     ) -> OperationRecord:
         rate = _HA_PER_HOUR[operation_type] * self._rng.uniform(0.8, 1.2)
-        hours = max(0.5, plan.field_area_ha / rate)
+        hours = min(_MAX_OPERATION_HOURS, max(0.5, plan.field_area_ha / rate))
 
-        started = datetime.combine(work_day, time(hour=self._rng.randint(6, 10)), tzinfo=UTC)
+        preferred = datetime.combine(work_day, time(hour=self._rng.randint(6, 10)), tzinfo=UTC)
+        busy_until = (free_at or {}).get(machine.machine_code)
+        started = max(preferred, busy_until) if busy_until else preferred
         finished = started + timedelta(hours=hours)
         fuel = round(
             _FUEL_L_PER_HOUR[machine.machine_type] * hours * self._rng.uniform(0.85, 1.2), 2
@@ -364,10 +388,29 @@ class MachineryGenerator:
 
                 fuel_level = self._maybe_refuel(fuel_level)
 
-            rows.extend(self._parked_heartbeats(machine, engine_hours, latitude, longitude))
+            busy_windows = [
+                (r.operation.started_at, r.operation.finished_at) for r in machine_operations
+            ]
+            rows.extend(
+                self._parked_heartbeats(machine, engine_hours, latitude, longitude, busy_windows)
+            )
 
-        logger.info("telemetry_generated", machines=len(machines), rows=len(rows))
-        return pl.DataFrame(rows, schema=TELEMETRY_SCHEMA)
+        frame = pl.DataFrame(rows, schema=TELEMETRY_SCHEMA)
+
+        # `uq_telemetry_machine_ts` makes (machine, timestamp) unique, so a
+        # collision is an insert failure rather than a wrong number. Scheduling
+        # already prevents overlapping operations; this is the invariant made
+        # explicit, and it complains rather than quietly dropping rows.
+        deduplicated = frame.unique(subset=["machine_code", "reading_ts"], keep="first")
+        if deduplicated.height != frame.height:
+            logger.warning(
+                "telemetry_duplicate_timestamps",
+                dropped=frame.height - deduplicated.height,
+                detail="a machine emitted two readings for one instant",
+            )
+
+        logger.info("telemetry_generated", machines=len(machines), rows=deduplicated.height)
+        return deduplicated.sort("machine_code", "reading_ts")
 
     def _maybe_refuel(self, fuel_level: float) -> float:
         return self._rng.uniform(80, 100) if fuel_level < _REFUEL_THRESHOLD_PCT else fuel_level
@@ -378,16 +421,27 @@ class MachineryGenerator:
         engine_hours: float,
         latitude: float,
         longitude: float,
+        busy_windows: Sequence[tuple[datetime, datetime]] = (),
     ) -> list[dict[str, object]]:
-        """One reading a day while the machine sits in the yard."""
+        """One reading a day while the machine sits in the yard.
+
+        Skipped on days the machine is still working at that hour. A long job
+        can run past midnight, and emitting a "parked" reading for a machine
+        that is mid-field would both contradict itself and collide with the
+        operation's own sample on `uq_telemetry_machine_ts`.
+        """
         rows: list[dict[str, object]] = []
         day = self._config.start_date
         while day <= self._config.end_date:
+            moment = datetime.combine(day, time(hour=3), tzinfo=UTC)
+            if any(start <= moment < finish for start, finish in busy_windows):
+                day += timedelta(days=1)
+                continue
             rows.append(
                 {
                     "machine_code": machine.machine_code,
                     "operation_key": None,
-                    "reading_ts": datetime.combine(day, time(hour=3), tzinfo=UTC),
+                    "reading_ts": moment,
                     "engine_hours": round(engine_hours, 2),
                     "engine_running": False,
                     "is_idle": False,

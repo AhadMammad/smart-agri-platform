@@ -407,3 +407,59 @@ class TestCostAccounting:
             )
             if applied > 0 and booked > 0:
                 assert booked == pytest.approx(applied, rel=0.01)
+
+
+class TestMachineScheduling:
+    """Regressions from the first real seeding run.
+
+    Both bugs here produced valid-looking Python objects that Postgres then
+    rejected, so only a constraint — or these tests — could catch them.
+    """
+
+    def test_a_machine_never_works_two_fields_at_once(self, dataset) -> None:  # type: ignore[no-untyped-def]
+        """Scheduling plan by plan handed the same machine two fields on the
+        same morning, which is physically impossible and produced duplicate
+        telemetry that violated uq_telemetry_machine_ts."""
+        by_machine: dict[str, list[tuple[object, object]]] = {}
+        for record in dataset.operations:
+            operation = record.operation
+            by_machine.setdefault(operation.machine_code, []).append(
+                (operation.started_at, operation.finished_at)
+            )
+
+        for machine_code, windows in by_machine.items():
+            ordered = sorted(windows)
+            for (_, earlier_end), (later_start, _) in itertools.pairwise(ordered):
+                assert later_start >= earlier_end, f"{machine_code} overlaps itself"
+
+    def test_telemetry_has_no_duplicate_timestamps(self, dataset) -> None:  # type: ignore[no-untyped-def]
+        """Mirrors uq_telemetry_machine_ts; a duplicate fails the insert."""
+        telemetry = dataset.telemetry
+        unique = telemetry.unique(subset=["machine_code", "reading_ts"])
+        assert unique.height == telemetry.height
+
+    def test_parked_readings_never_fall_inside_a_working_window(self, dataset) -> None:  # type: ignore[no-untyped-def]
+        """A long job can run past midnight. A 'parked' reading for a machine
+        that is mid-field contradicts itself and collides with the operation's
+        own sample."""
+        windows: dict[str, list[tuple[object, object]]] = {}
+        for record in dataset.operations:
+            operation = record.operation
+            windows.setdefault(operation.machine_code, []).append(
+                (operation.started_at, operation.finished_at)
+            )
+
+        parked = dataset.telemetry.filter(~dataset.telemetry["engine_running"])
+        for row in parked.iter_rows(named=True):
+            for start, finish in windows.get(row["machine_code"], []):
+                assert not (
+                    start <= row["reading_ts"] < finish
+                ), f"{row['machine_code']} reported parked while working"
+
+    def test_no_operation_runs_longer_than_a_working_day(self, dataset) -> None:  # type: ignore[no-untyped-def]
+        from smart_agri.generator.machinery import _MAX_OPERATION_HOURS
+
+        for record in dataset.operations:
+            operation = record.operation
+            hours = (operation.finished_at - operation.started_at).total_seconds() / 3600
+            assert hours <= _MAX_OPERATION_HOURS + 0.01
