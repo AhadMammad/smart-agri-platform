@@ -8,6 +8,13 @@
   build that is not reliably present in the official images.
 -->
 <clickhouse>
+    <!-- Listen on every interface.
+         The stock config binds only to localhost, so the container's own
+         healthcheck passes over 127.0.0.1 while nothing else on the Compose
+         network can connect at all — a service that reports healthy and
+         refuses every real client. -->
+    <listen_host>0.0.0.0</listen_host>
+
     <logger>
         <level>information</level>
         <console>true</console>

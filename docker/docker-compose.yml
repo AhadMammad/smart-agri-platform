@@ -232,20 +232,28 @@ services:
     restart: unless-stopped
 
   hive-metastore:
-    image: ${HIVE_IMAGE}
+    # Built rather than pulled: the stock image has no PostgreSQL JDBC driver.
+    build:
+      context: ./hive
+      args:
+        HIVE_IMAGE: ${HIVE_IMAGE}
+    image: smart-agri-hive:local
     profiles: [core, orchestration]
     hostname: hive-metastore
     environment:
       SERVICE_NAME: metastore
       DB_DRIVER: postgres
-      # `-initSchema` is safe to repeat: it is a no-op once the schema exists.
+      # IS_RESUME is deliberately unset. The image reads it as
+      # SKIP_SCHEMA_INIT, so setting it stops the Metastore schema from ever
+      # being created. Left unset, the entrypoint runs
+      # `schematool -initOrUpgradeSchema`, which initialises an empty database
+      # and upgrades a populated one — safe on every restart.
       SERVICE_OPTS: >-
         -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
         -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://metastore-db:5432/${METASTORE_DB}
         -Djavax.jdo.option.ConnectionUserName=${METASTORE_DB_USER}
         -Djavax.jdo.option.ConnectionPassword=${METASTORE_DB_PASSWORD}
         -Dhive.metastore.warehouse.dir=hdfs://namenode:8020${HDFS_LAKE_ROOT}/warehouse
-      IS_RESUME: "true"
     ports:
       - "${HIVE_METASTORE_HOST_PORT}:9083"
     healthcheck:

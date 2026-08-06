@@ -81,8 +81,8 @@ build-etl-test: ## Build the ETL test image (dev deps + test suite)
 	docker build -f $(ROOT)/docker/etl/Dockerfile --target test -t $(ETL_TEST_IMAGE) $(ROOT)
 
 .PHONY: build-services
-build-services: ## Build the customised Airflow and Superset images
-	$(COMPOSE) --profile orchestration --profile bi build
+build-services: ## Build the customised Hive, Airflow and Superset images
+	$(COMPOSE) --profile core --profile orchestration --profile bi build
 
 # -----------------------------------------------------------------------------
 # Stack lifecycle
