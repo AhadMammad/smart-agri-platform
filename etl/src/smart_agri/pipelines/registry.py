@@ -29,6 +29,16 @@ from smart_agri.pipelines.silver import (
     SilverDimSensorPipeline,
     SilverFactSensorReadingPipeline,
 )
+from smart_agri.pipelines.weather import (
+    BronzeWeatherArchivePipeline,
+    BronzeWeatherForecastPipeline,
+    GoldDimDatePipeline,
+    GoldFieldWeatherDailyPipeline,
+    LoadDimDatePipeline,
+    LoadFactWeatherDailyPipeline,
+    LoadFieldWeatherDailyPipeline,
+    SilverFactWeatherDailyPipeline,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,6 +83,15 @@ _REGISTRY: dict[str, PipelineFactory] = {
     },
     "load.fact_sensor_reading": LoadFactSensorReadingPipeline,
     "load.field_soil_daily": LoadGoldFieldSoilDailyPipeline,
+    # --- weather (Phase 4) ---
+    "bronze.weather_archive": BronzeWeatherArchivePipeline,
+    "bronze.weather_forecast": BronzeWeatherForecastPipeline,
+    "silver.fact_weather_daily": SilverFactWeatherDailyPipeline,
+    "gold.dim_date": GoldDimDatePipeline,
+    "gold.field_weather_daily": GoldFieldWeatherDailyPipeline,
+    "load.dim_date": LoadDimDatePipeline,
+    "load.fact_weather_daily": LoadFactWeatherDailyPipeline,
+    "load.field_weather_daily": LoadFieldWeatherDailyPipeline,
 }
 
 
@@ -94,6 +113,18 @@ SOIL_SENSOR_STAGES: tuple[tuple[str, ...], ...] = (
         "load.fact_sensor_reading",
         "load.field_soil_daily",
     ),
+)
+
+
+#: Weather, as run by both weather DAGs. `bronze.farm` and the Silver
+#: dimensions are re-run here rather than assumed: weather joins to farms and
+#: fields, and the weather DAGs must not depend on the soil DAG having run.
+WEATHER_STAGES: tuple[tuple[str, ...], ...] = (
+    ("bronze.farm", "bronze.field"),
+    ("bronze.weather_archive", "bronze.weather_forecast"),
+    ("silver.dim_farm", "silver.dim_field", "silver.fact_weather_daily"),
+    ("gold.dim_date", "gold.field_weather_daily"),
+    ("load.dim_date", "load.fact_weather_daily", "load.field_weather_daily"),
 )
 
 

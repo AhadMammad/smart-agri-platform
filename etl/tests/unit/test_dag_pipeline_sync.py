@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from smart_agri.pipelines import SOIL_SENSOR_STAGES, pipeline_names
+from smart_agri.pipelines import SOIL_SENSOR_STAGES, WEATHER_STAGES, pipeline_names
 
 DAG_PIPELINES_FILE = (
     Path(__file__).resolve().parents[3] / "airflow" / "dags" / "common" / "pipelines.py"
@@ -38,12 +38,21 @@ def _literal_from_module(path: Path, name: str) -> object:
     raise AssertionError(msg)
 
 
-@pytest.fixture(scope="module")
-def dag_stages() -> tuple[tuple[str, ...], ...]:
+def _stages(name: str) -> tuple[tuple[str, ...], ...]:
     if not DAG_PIPELINES_FILE.exists():
         pytest.skip(f"DAG file not present at {DAG_PIPELINES_FILE}")
-    value = _literal_from_module(DAG_PIPELINES_FILE, "SOIL_SENSOR_STAGES")
+    value = _literal_from_module(DAG_PIPELINES_FILE, name)
     return tuple(tuple(stage) for stage in value)  # type: ignore[union-attr]
+
+
+@pytest.fixture(scope="module")
+def dag_stages() -> tuple[tuple[str, ...], ...]:
+    return _stages("SOIL_SENSOR_STAGES")
+
+
+@pytest.fixture(scope="module")
+def dag_weather_stages() -> tuple[tuple[str, ...], ...]:
+    return _stages("WEATHER_STAGES")
 
 
 class TestStagesMatchRegistry:
@@ -66,15 +75,45 @@ class TestStagesMatchRegistry:
         assert len(labels) == len(dag_stages)  # type: ignore[arg-type]
 
 
+class TestWeatherStagesMatchRegistry:
+    def test_dag_weather_stages_are_identical_to_the_registry(
+        self, dag_weather_stages: tuple[tuple[str, ...], ...]
+    ) -> None:
+        assert dag_weather_stages == WEATHER_STAGES
+
+    def test_every_weather_pipeline_is_registered(
+        self, dag_weather_stages: tuple[tuple[str, ...], ...]
+    ) -> None:
+        referenced = {name for stage in dag_weather_stages for name in stage}
+        unknown = referenced - set(pipeline_names())
+        assert not unknown, f"weather DAG references unregistered pipelines: {sorted(unknown)}"
+
+    def test_weather_reruns_its_own_source_extracts(self) -> None:
+        """A weather DAG must not depend on the soil DAG having run first, so it
+        re-extracts the farm and field snapshots its joins need."""
+        first_stage = WEATHER_STAGES[0]
+        assert "bronze.farm" in first_stage
+        assert "bronze.field" in first_stage
+
+
 class TestRegistryCoverage:
     def test_every_registered_pipeline_runs_in_some_stage(self) -> None:
         """An orphaned pipeline is either dead code or a forgotten DAG task."""
         staged = {name for stage in SOIL_SENSOR_STAGES for name in stage}
+        staged |= {name for stage in WEATHER_STAGES for name in stage}
         assert set(pipeline_names()) == staged
 
     def test_stages_contain_no_duplicates(self) -> None:
-        flat = [name for stage in SOIL_SENSOR_STAGES for name in stage]
-        assert len(flat) == len(set(flat))
+        for stages in (SOIL_SENSOR_STAGES, WEATHER_STAGES):
+            flat = [name for stage in stages for name in stage]
+            assert len(flat) == len(set(flat))
+
+    def test_weather_stages_are_ordered_by_zone(self) -> None:
+        """Each stage may only depend on zones already built."""
+        expected = ("bronze", "bronze", "silver", "gold", "load")
+        for prefix, stage in zip(expected, WEATHER_STAGES, strict=True):
+            for name in stage:
+                assert name.startswith(f"{prefix}."), f"{name} is not in a {prefix} stage"
 
     def test_stages_are_ordered_bronze_silver_gold_load(self) -> None:
         """Each stage may only depend on zones already built."""

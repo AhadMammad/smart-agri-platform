@@ -7,6 +7,7 @@ from disk, so there is no config file to keep in sync across services.
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from functools import lru_cache
 
@@ -110,6 +111,36 @@ class HiveSettings(_Base):
     port: int = 9083
 
 
+class OpenMeteoSettings(_Base):
+    """The weather API — the platform's only external data source.
+
+    Free tier, no API key, but genuinely rate limited: a backfill across many
+    farms will be throttled without `max_rps`, and a throttled request that is
+    not retried loses that farm's history silently.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="OPEN_METEO_", extra="ignore")
+
+    archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+
+    max_rps: float = Field(default=1.0, gt=0, description="Requests per second ceiling")
+    max_retries: int = Field(default=5, ge=0)
+    timeout_s: float = Field(default=30.0, gt=0)
+
+    #: The archive lags real time by several days, so anything inside this
+    #: window has to come from the forecast endpoint's `past_days` instead.
+    archive_lag_days: int = Field(default=6, ge=0, le=30)
+
+    #: How far either side of today the daily run reaches.
+    forecast_past_days: int = Field(default=7, ge=0, le=92)
+    forecast_days: int = Field(default=7, ge=1, le=16)
+
+    #: Earliest date the backfill will request. Defaults to the start of the
+    #: generator's `small` window so weather covers the whole dataset.
+    backfill_start: date = Field(default=date(2025, 8, 1))
+
+
 class Settings(_Base):
     """Root settings object. Compose the service blocks; do not nest env prefixes."""
 
@@ -120,6 +151,7 @@ class Settings(_Base):
     clickhouse: ClickHouseSettings = Field(default_factory=ClickHouseSettings)
     hdfs: HdfsSettings = Field(default_factory=HdfsSettings)
     hive: HiveSettings = Field(default_factory=HiveSettings)
+    open_meteo: OpenMeteoSettings = Field(default_factory=OpenMeteoSettings)
 
 
 @lru_cache(maxsize=1)

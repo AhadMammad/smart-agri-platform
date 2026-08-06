@@ -66,6 +66,7 @@ make migrate                     # Liquibase changelogs -> Postgres
 make init-clickhouse             # ClickHouse tables, views, materialized views
 make seed PROFILE=small          # synthetic farms, fields, sensors, readings
 make run-all                     # Bronze -> Silver -> Gold -> ClickHouse
+make weather                     # Open-Meteo -> lake -> ClickHouse
 make superset-import             # dashboards, charts and datasets from YAML
 ```
 
@@ -80,6 +81,34 @@ The same pipelines run in Airflow as the `soil_sensor_daily` DAG — fourteen
 make pipelines                                    # list them
 make run PIPELINE=silver.dim_farm DATE=2026-08-01
 ```
+
+## Weather
+
+Weather is the platform's only external data source. `make weather` fetches it
+for every farm and reloads ClickHouse; Airflow runs the same stages as
+`weather_daily` (05:30 UTC) and `weather_backfill` (manual).
+
+```bash
+make weather-backfill   # establish the full history, once
+make weather            # keep it current
+```
+
+Two endpoints are used because neither covers the whole timeline: the archive
+holds measurements but lags real time by about a week, while the forecast
+endpoint reaches a fortnight either side of today. Silver merges them and lets
+the **measurement win** wherever both cover a date — a chart correlating
+rainfall with observed soil moisture must not compare against a prediction.
+
+Gold derives what the dashboards actually ask for: growing-degree days, rolling
+7- and 30-day rainfall, and the water balance between what fell and what
+evaporated. The **Irrigation & Water** dashboard plots real rainfall against
+measured soil moisture — the relationship should be visible in the days after
+rain.
+
+The free tier is genuinely rate limited, so the client paces itself, retries
+throttling and transient faults with exponential backoff, and caches responses.
+Nothing is retried that will stay broken: a 400 fails immediately rather than
+burning quota.
 
 ## The generated dataset
 
@@ -172,8 +201,8 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 1 | Repo foundation and infrastructure | **done** |
 | 2 | Thin end-to-end slice: soil sensor readings | **done** |
 | 3 | Full OLTP schema and data generator | **done** |
-| 4 | Weather ingestion (Open-Meteo) | next |
-| 5 | Bronze and Silver for all domains | |
+| 4 | Weather ingestion (Open-Meteo) | **done** |
+| 5 | Bronze and Silver for all domains | next |
 | 6 | Gold layer and full ClickHouse star schema | |
 | 7 | Superset dashboards as code | |
 | 8 | CI, quality gates, documentation | |

@@ -182,6 +182,16 @@ run-all: ## Run the whole soil-sensor slice locally (Airflow runs it as tasks)
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
 	  $(ETL_IMAGE) run-all $(if $(DATE),--date $(DATE),)
 
+.PHONY: weather-backfill
+weather-backfill: ## Load the full Open-Meteo history for every farm (needs network)
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) weather-backfill $(if $(DATE),--date $(DATE),)
+
+.PHONY: weather
+weather: ## Refresh weather for every farm and reload ClickHouse
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) weather $(if $(DATE),--date $(DATE),)
+
 .PHONY: pipelines
 pipelines: ## List the registered pipelines in execution order
 	docker run --rm --env-file $(ENV_FILE) $(ETL_IMAGE) list-pipelines
@@ -192,6 +202,7 @@ demo: ## Zero to dashboard: migrate, seed, build the warehouse, load, import cha
 	@$(MAKE) --no-print-directory init-clickhouse
 	@$(MAKE) --no-print-directory seed
 	@$(MAKE) --no-print-directory run-all
+	@$(MAKE) --no-print-directory weather
 	@$(MAKE) --no-print-directory superset-import
 	@echo ""
 	@$(MAKE) --no-print-directory urls

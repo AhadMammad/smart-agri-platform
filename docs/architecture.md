@@ -176,6 +176,40 @@ downstream derives from it, so water-use efficiency, cost per hectare and yield
 are related quantities instead of three unrelated series that happen to share a
 field id.
 
+### Weather: two endpoints, measurement wins
+
+No single Open-Meteo endpoint covers the timeline the platform needs. The
+archive holds measurements but lags real time by roughly a week; the forecast
+endpoint reaches a fortnight either side of today, but its recent past is model
+output rather than observation.
+
+Both are ingested, into separate Bronze datasets, and Silver merges them with
+the archive taking precedence for any date both cover. Every row keeps a
+`source` and an `is_actual` flag.
+
+That distinction is not bookkeeping. The dashboard correlating rainfall against
+measured soil moisture filters to actuals, because comparing an observation with
+a prediction would show a relationship partly produced by the forecast model
+rather than by the field. `v_field_water_daily` applies the filter once so every
+chart asks the question the same way.
+
+The windows deliberately **overlap**: the forecast's `past_days` reaches back
+past where the archive stops. Without that overlap the series would carry a
+permanent hole a few days wide, right at the point most dashboards look.
+
+### The weather client is the only place that needs real resilience
+
+Everything else in the platform fails for reasons inside the stack. The weather
+client fails for reasons outside it, so it carries what nothing else needs:
+client-side rate limiting, exponential backoff, and response caching.
+
+The retry policy distinguishes *retryable* from *terminal*. A 429 or 5xx is
+tried again — a throttled request that is dropped would leave that farm's
+weather missing while the pipeline reported success. A 400 is not retried: it
+will stay wrong, and retrying only consumes the quota the limiter exists to
+protect. Open-Meteo also reports some failures in the body with an HTTP 200, so
+the body is checked as well as the status.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:

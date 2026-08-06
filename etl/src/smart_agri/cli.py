@@ -157,6 +157,51 @@ def run_all(logical_date: _DateOption = None) -> None:
 
 
 @app.command()
+def weather(logical_date: _DateOption = None) -> None:
+    """Refresh weather for every farm and reload ClickHouse.
+
+    Runs the same stages as the `weather_daily` DAG, in one process. Convenience
+    for a local run; Airflow runs them as separate tasks so a failure is
+    isolated to one stage.
+    """
+    from smart_agri.pipelines import WEATHER_STAGES, PipelineContext, get_pipeline
+
+    target = _resolve_date(logical_date)
+    context = PipelineContext()
+
+    for index, stage in enumerate(WEATHER_STAGES, start=1):
+        typer.echo(f"--- stage {index} ---")
+        for name in stage:
+            stats = get_pipeline(name, context).run(target)
+            typer.echo(
+                f"  {name}: read={stats.rows_read} written={stats.rows_written} "
+                f"quarantined={stats.rows_quarantined}"
+            )
+
+    typer.echo("\nweather refresh complete.")
+
+
+@app.command(name="weather-backfill")
+def weather_backfill(logical_date: _DateOption = None) -> None:
+    """Load the full Open-Meteo history for every farm.
+
+    Identical to `weather` — the archive pipeline already reaches back to
+    `OPEN_METEO_BACKFILL_START` on every run. Exposed under its own name because
+    the intent differs: this is the deliberate first load, and the operator
+    should see what it is about to request before it runs.
+    """
+    from smart_agri.config import get_settings as _settings
+
+    open_meteo = _settings().open_meteo
+    typer.echo(
+        f"backfilling weather from {open_meteo.backfill_start}, "
+        f"archive lag {open_meteo.archive_lag_days}d, "
+        f"rate limit {open_meteo.max_rps}/s"
+    )
+    weather(logical_date)
+
+
+@app.command()
 def seed(
     profile: Annotated[
         str, typer.Option("--profile", help="Generator profile: small, medium or large.")

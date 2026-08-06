@@ -41,6 +41,16 @@ _FORWARDED_ENV_VARS: tuple[str, ...] = (
     "HDFS_LAKE_ROOT",
     "HIVE_METASTORE_HOST",
     "HIVE_METASTORE_PORT",
+    # Weather (Phase 4). The API needs no key, but its pacing and window
+    # settings must reach the task container or every run uses the defaults.
+    "OPEN_METEO_ARCHIVE_URL",
+    "OPEN_METEO_FORECAST_URL",
+    "OPEN_METEO_MAX_RPS",
+    "OPEN_METEO_MAX_RETRIES",
+    "OPEN_METEO_BACKFILL_START",
+    "OPEN_METEO_ARCHIVE_LAG_DAYS",
+    "OPEN_METEO_FORECAST_PAST_DAYS",
+    "OPEN_METEO_FORECAST_DAYS",
 )
 
 

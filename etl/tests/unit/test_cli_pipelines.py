@@ -219,3 +219,33 @@ class TestRealDdlFiles:
                 head = statement.strip().upper()
                 if head.startswith("CREATE"):
                     assert "IF NOT EXISTS" in head, f"{path.name}: {head[:60]}"
+
+
+class TestWeatherCommands:
+    def test_weather_runs_every_stage_in_order(self, runs: list[tuple[str, date]]) -> None:
+        from smart_agri.pipelines import WEATHER_STAGES
+
+        result = runner.invoke(app, ["weather", "--date", "2026-08-01"])
+        assert result.exit_code == 0
+
+        expected = [name for stage in WEATHER_STAGES for name in stage]
+        assert [name for name, _ in runs] == expected
+
+    def test_backfill_reports_the_window_before_requesting(
+        self, runs: list[tuple[str, date]]
+    ) -> None:
+        """A backfill is the heaviest external call the platform makes; the
+        operator should see what it is about to request."""
+        result = runner.invoke(app, ["weather-backfill", "--date", "2026-08-01"])
+        assert result.exit_code == 0
+        assert "backfilling weather from" in result.output
+        assert "rate limit" in result.output
+        assert runs, "backfill must still run the stages"
+
+    def test_backfill_and_weather_run_the_same_stages(self, runs: list[tuple[str, date]]) -> None:
+        runner.invoke(app, ["weather", "--date", "2026-08-01"])
+        after_weather = [name for name, _ in runs]
+        runs.clear()
+
+        runner.invoke(app, ["weather-backfill", "--date", "2026-08-01"])
+        assert [name for name, _ in runs] == after_weather

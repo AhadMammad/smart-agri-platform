@@ -1,0 +1,192 @@
+# Irrigation & Water — the Phase 4 dashboard.
+#
+# Its top chart is the platform's exit criterion for weather ingestion: real
+# rainfall from Open-Meteo against soil moisture measured by the field probes.
+# If the pipeline is sound, moisture rises in the days after rain.
+dashboard_title: Irrigation & Water
+description: Rainfall, evapotranspiration and soil moisture per field
+css: ''
+slug: irrigation-water
+uuid: 9b1c2a55-4e7f-5c8d-9a3b-1f6e2d8c4b07
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-intro
+      - ROW-rain
+      - ROW-balance
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Irrigation & Water
+
+  ROW-intro:
+    type: ROW
+    id: ROW-intro
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 24
+      code: |-
+        ## Irrigation & Water
+
+        Weather comes from **Open-Meteo**; soil moisture from the field probes.
+        Only *measured* weather is shown — forecast rows are excluded, because
+        correlating an observation against a prediction would partly reflect the
+        forecast model rather than the field.
+
+        **Water balance** is rainfall less reference evapotranspiration. A
+        negative figure means the crop drew on stored soil water that day.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-intro
+
+  ROW-rain:
+    type: ROW
+    id: ROW-rain
+    children:
+      - CHART-rain-vs-moisture
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-rain-vs-moisture:
+    type: CHART
+    id: CHART-rain-vs-moisture
+    children: []
+    meta:
+      width: 12
+      height: 64
+      chartId: null
+      uuid: d10e819f-8c7d-5463-8856-24ab0a275a5d
+      sliceName: Rainfall vs soil moisture
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-rain
+
+  ROW-balance:
+    type: ROW
+    id: ROW-balance
+    children:
+      - CHART-water-balance
+      - CHART-degree-days
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-water-balance:
+    type: CHART
+    id: CHART-water-balance
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: 41fab93f-8ed3-5b0a-a291-71bcbb03628c
+      sliceName: Water balance by region
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-balance
+  CHART-degree-days:
+    type: CHART
+    id: CHART-degree-days
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: c8ccee63-ac3f-51f6-9d94-0ac684e6fea5
+      sliceName: Accumulated degree-days by field
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-balance
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  native_filter_configuration:
+    - id: NATIVE_FILTER-water-region
+      name: Region
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 8376e30c-86f7-5f53-82d5-a413a448a39e
+          column:
+            name: region
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-water-field
+      name: Field
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 8376e30c-86f7-5f53-82d5-a413a448a39e
+          column:
+            name: field_code
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-water-date
+      name: Date range
+      filterType: filter_time
+      controlValues: {}
+      targets:
+        - datasetUuid: 8376e30c-86f7-5f53-82d5-a413a448a39e
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
