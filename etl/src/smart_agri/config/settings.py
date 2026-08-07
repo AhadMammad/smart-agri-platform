@@ -83,6 +83,9 @@ class HdfsSettings(_Base):
 
     namenode_host: str = "namenode"
     namenode_http_port: int = 9870
+    #: The native RPC port. The ETL never speaks it — WebHDFS is the data path —
+    #: but Hive does, so table locations have to be addressed through it.
+    namenode_rpc_port: int = 8020
     user: str = "root"
     lake_root: str = "/lake"
 
@@ -100,6 +103,21 @@ class HdfsSettings(_Base):
         suffix = "/".join(p.strip("/") for p in parts if p)
         base = f"{self.lake_root.rstrip('/')}/{zone.value}"
         return f"{base}/{suffix}" if suffix else base
+
+    def zone_uri(self, zone: LakeZone, *parts: str) -> str:
+        """`zone_path` as a fully-qualified `hdfs://` URI.
+
+        Hive resolves a scheme-less location against its own `fs.defaultFS`,
+        which in this stack is the local filesystem — so a bare path would
+        register a table over an empty directory inside the Hive container
+        rather than over the lake. Qualifying the URI here keeps the DDL correct
+        regardless of how Hive is configured.
+
+        >>> HdfsSettings().zone_uri(LakeZone.BRONZE, "farm")
+        'hdfs://namenode:8020/lake/bronze/farm'
+        """
+        authority = f"hdfs://{self.namenode_host}:{self.namenode_rpc_port}"
+        return f"{authority}{self.zone_path(zone, *parts)}"
 
 
 class HiveSettings(_Base):

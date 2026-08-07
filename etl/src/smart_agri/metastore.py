@@ -87,7 +87,7 @@ class TableSpec:
     schema: pa.DataFrameSchema
 
     def location(self, settings: HdfsSettings) -> str:
-        return settings.zone_path(self.zone, self.dataset)
+        return settings.zone_uri(self.zone, self.dataset)
 
 
 def hive_type(dtype: object) -> str:

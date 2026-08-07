@@ -91,10 +91,17 @@ def test_table_specs_carry_the_partition_key_of_their_strategy() -> None:
 def test_table_location_points_at_its_zone(settings: HdfsSettings) -> None:
     by_name = {table.name: table for table in table_specs()}
 
-    assert by_name["bronze_farm"].location(settings) == settings.zone_path(LakeZone.BRONZE, "farm")
-    assert by_name["silver_dim_farm"].location(settings) == settings.zone_path(
+    assert by_name["bronze_farm"].location(settings) == settings.zone_uri(LakeZone.BRONZE, "farm")
+    assert by_name["silver_dim_farm"].location(settings) == settings.zone_uri(
         LakeZone.SILVER, "dim_farm"
     )
+
+
+def test_every_location_is_a_fully_qualified_hdfs_uri(settings: HdfsSettings) -> None:
+    """A scheme-less location resolves against Hive's own filesystem, not the lake."""
+    for table in table_specs():
+        assert table.location(settings).startswith("hdfs://")
+        assert create_table_ddl(table, settings).count("LOCATION 'hdfs://") == 1
 
 
 def test_ddl_declares_external_partitioned_parquet(settings: HdfsSettings) -> None:
