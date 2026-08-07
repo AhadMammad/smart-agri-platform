@@ -42,12 +42,12 @@ TIMEOUT = 180
 def call(
     path: str, method: str = "GET", body: Any = None, token: str | None = None
 ) -> dict[str, Any]:
-    request = urllib.request.Request(BASE + path, method=method)  # noqa: S310
+    request = urllib.request.Request(BASE + path, method=method)
     request.add_header("Content-Type", "application/json")
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     payload = json.dumps(body).encode() if body is not None else None
-    with urllib.request.urlopen(request, payload, timeout=TIMEOUT) as response:  # noqa: S310
+    with urllib.request.urlopen(request, payload, timeout=TIMEOUT) as response:
         return json.loads(response.read())
 
 
@@ -114,7 +114,7 @@ def main() -> int:
         charts = call(f"/api/v1/dashboard/{dashboard['id']}/charts", token=token)["result"]
         datasets = call(f"/api/v1/dashboard/{dashboard['id']}/datasets", token=token)["result"]
         print(
-            f"  {dashboard['dashboard_title']:24s} slug={str(dashboard.get('slug')):20s} "
+            f"  {dashboard['dashboard_title']:24s} slug={dashboard.get('slug')!s:20s} "
             f"charts={len(charts):2d} datasets={len(datasets)}"
         )
 

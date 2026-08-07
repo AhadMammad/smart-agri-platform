@@ -146,6 +146,40 @@ Two details are load-bearing:
 `make validate-ddl` applies the whole schema to a throwaway ClickHouse and
 queries every view, catching SQL that no column-level test can.
 
+## Dashboards
+
+Four dashboards, one per analytics domain, defined entirely as YAML in
+[superset/assets/](superset/assets/) — 8 datasets, 21 charts and the filters and
+layout that go with them. Nothing is configured by hand in the UI.
+
+```bash
+make superset-import     # datasets, charts and dashboards from YAML
+make verify-dashboards   # run every chart and report whether it returns data
+make superset-export     # pull UI edits back into the tree, then review the diff
+```
+
+| Dashboard | Reads | Shows |
+|---|---|---|
+| Field & Crop Health | soil daily + crop health | moisture, stress, and the canopy curve against each crop's own peak |
+| Irrigation & Water | water daily + irrigation daily | rainfall against measured moisture, and how much of the water was paid for |
+| Machinery & Fleet | machine daily + utilisation | working/idle/parked/down days, fuel per hectare, faults |
+| Yield & Economics | planting economics + cost breakdown | margin per hectare, cost structure, yield against water received |
+
+The workflow is export-and-review, not edit-in-place: tweak a chart in the UI,
+run `make superset-export`, and commit the diff. What is committed is what a
+fresh stack reproduces.
+
+Two checks guard it, because a dashboard is a web of UUID references that
+Superset resolves only at import:
+
+- `tests/unit/test_superset_assets.py` walks the whole graph statically — every
+  chart a dashboard places exists, every column and metric a chart names is
+  declared on its dataset, and every dataset column and metric expression
+  resolves against the ClickHouse DDL. It runs in `make check`.
+- `make verify-dashboards` runs each chart through Superset's own query
+  pipeline and reports its row count, which is the only way to learn that a
+  chart imports cleanly and then renders nothing.
+
 ## The generated dataset
 
 Generated farms sit in real agricultural regions of **North Africa** (Nile
@@ -257,18 +291,18 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 4 | Weather ingestion (Open-Meteo) | **done** | 1,825 archive rows; soil moisture rises with rainfall |
 | 5 | Bronze and Silver for all domains | **done** | 21 Bronze + 19 Silver datasets; re-runs deduplicate to identical counts; 39 tables in Hive |
 | 6 | Gold layer and full ClickHouse star schema | **done** | 27 tables + 15 views; every dashboard question answered by one query |
-| 7 | Superset dashboards as code | **next** | Four dashboards reproduced from an empty stack |
-| 8 | CI, quality gates, documentation | | CI green on a clean checkout; documented path to dashboards |
+| 7 | Superset dashboards as code | **done** | Four dashboards reproduced from an empty stack |
+| 8 | CI, quality gates, documentation | **next** | CI green on a clean checkout; documented path to dashboards |
 
 Deferred: Iceberg migration, Spark, and ML (yield forecasting, irrigation-need
 prediction, anomaly detection).
 
 ### Verification status
 
-Phases 1–6 have been **run on the target VM**, not just built and unit-tested.
+Phases 1–7 have been **run on the target VM**, not just built and unit-tested.
 The full stack — HDFS, Hive Metastore, ClickHouse, Airflow on Celery, Superset —
 comes up, the pipelines move real data end to end, the weather chain calls the
-live Open-Meteo API, and both dashboards query ClickHouse.
+live Open-Meteo API, and all four dashboards query ClickHouse.
 
 Also verified there: 22/22 integration tests, all nine DAGs registered with no
 import errors, and both the fourteen-task `soil_sensor_daily` and the
@@ -309,6 +343,24 @@ Phase 6, measured on the VM:
   every total exactly — 1,274 crop-health rows, 7,560 irrigation, 4,392
   machine-days, 37 plantings, $2,319,894 of cost.
 - 22/22 integration tests and 10/10 DAG integrity tests.
+
+Phase 7, measured on the VM — and measured from **nothing**, because the stack
+was wiped between Phase 6 and this run:
+
+- `make migrate && make init-clickhouse && make seed && make run-all &&
+  make weather-backfill && make lake && make analytics` rebuilt the whole
+  platform from empty volumes, reproducing **every** count exactly: 180,580
+  seeded rows, 1,890 weather rows, 1,274 crop-health rows, 7,560 irrigation,
+  4,392 machine-days, 37 plantings.
+- `make superset-import` then produced **four dashboards** — Field & Crop
+  Health (7 charts), Irrigation & Water (6), Machinery & Fleet (4), Yield &
+  Economics (4) — over 8 datasets, from committed YAML alone.
+- **All 21 charts return data.** `make verify-dashboards` runs each one through
+  Superset's own query pipeline and reports its row count; nothing was empty and
+  nothing failed.
+- The numbers survive the round trip: the irrigation-dependence chart renders
+  92.3% for the Nile Delta against 4.6% for the Ashanti Belt, the same figures
+  the warehouse gives directly.
 
 That run found **three bugs that 598 unit tests, strict mypy and the DDL
 contract test had all passed** — every one of them in SQL:
