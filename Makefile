@@ -166,6 +166,19 @@ init-clickhouse: ## Create the ClickHouse tables, views and materialized views
 	  -v $(ROOT)/clickhouse/ddl:/opt/clickhouse/ddl:ro \
 	  $(ETL_IMAGE) init-clickhouse
 
+.PHONY: register-tables
+register-tables: ## Register every Bronze and Silver dataset in the Hive Metastore
+	@docker run --rm --env-file $(ENV_FILE) $(ETL_IMAGE) register-tables > $(ROOT)/.register-tables.sql
+	@docker cp $(ROOT)/.register-tables.sql $$($(COMPOSE) ps -q hiveserver2):/tmp/register-tables.sql
+	@rm -f $(ROOT)/.register-tables.sql
+	$(COMPOSE) exec -T hiveserver2 \
+	  beeline -u "jdbc:hive2://localhost:10000" -f /tmp/register-tables.sql
+
+.PHONY: hive-tables
+hive-tables: ## List the external tables registered over the lake
+	$(COMPOSE) exec -T hiveserver2 \
+	  beeline -u "jdbc:hive2://localhost:10000" -e "SHOW TABLES IN agri_lake;"
+
 .PHONY: seed
 seed: ## Generate synthetic data into Postgres; PROFILE=small|medium|large
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \

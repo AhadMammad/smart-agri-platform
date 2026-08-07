@@ -270,6 +270,41 @@ services:
     networks: [agri-net]
     restart: unless-stopped
 
+  # HiveServer2 — a SQL endpoint over the Metastore.
+  #
+  # The Metastore speaks only Thrift, so registering an external table would
+  # otherwise mean adding a Thrift client to the ETL image. HiveServer2 accepts
+  # the same DDL over JDBC, which `make register-tables` drives with beeline —
+  # no new dependency, and it doubles as a way to query the lake directly.
+  hiveserver2:
+    build:
+      context: ./hive
+      args:
+        HIVE_IMAGE: ${HIVE_IMAGE}
+    image: smart-agri-hive:local
+    profiles: [core, orchestration]
+    hostname: hiveserver2
+    environment:
+      SERVICE_NAME: hiveserver2
+      # Point at the standalone Metastore rather than starting an embedded one.
+      SERVICE_OPTS: >-
+        -Dhive.metastore.uris=thrift://hive-metastore:9083
+        -Dhive.metastore.warehouse.dir=hdfs://namenode:8020${HDFS_LAKE_ROOT}/warehouse
+      IS_RESUME: "true"
+    ports:
+      - "${HIVESERVER2_HOST_PORT:-10000}:10000"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/10000'"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    networks: [agri-net]
+    restart: unless-stopped
+
   # ------------------------------------------------------- orchestration -----
   airflow-db:
     image: ${POSTGRES_IMAGE}

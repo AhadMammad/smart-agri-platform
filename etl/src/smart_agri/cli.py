@@ -287,6 +287,32 @@ def seed(
     typer.echo(result.summary())
 
 
+@app.command(name="register-tables")
+def register_tables(
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Write the DDL here instead of stdout."),
+    ] = None,
+) -> None:
+    """Emit the Hive DDL registering every Bronze and Silver dataset.
+
+    Generated from the same pandera contracts the pipelines validate against, so
+    the catalog cannot describe a shape the lake does not have. `make
+    register-tables` pipes the output through beeline.
+    """
+    from pathlib import Path
+
+    from smart_agri.metastore import registration_script, table_specs
+
+    script = registration_script(get_settings().hdfs)
+
+    if output:
+        Path(output).write_text(script)
+        typer.echo(f"wrote DDL for {len(table_specs())} tables to {output}")
+    else:
+        typer.echo(script)
+
+
 @app.command(name="init-clickhouse")
 def init_clickhouse(
     ddl_dir: Annotated[
