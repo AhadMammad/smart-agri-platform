@@ -320,3 +320,7 @@ check: lint typecheck test ## Everything CI enforces
 validate-compose: ## Verify the Compose file parses and resolves every variable
 	@$(COMPOSE) --profile core --profile orchestration --profile bi config -q \
 	  && echo "docker-compose.yml is valid."
+
+.PHONY: validate-ddl
+validate-ddl: ## Apply the ClickHouse DDL to a throwaway server and query every view
+	@bash $(ROOT)/scripts/validate_ddl.sh

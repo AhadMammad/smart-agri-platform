@@ -220,19 +220,22 @@ FROM
         crop_category,
         region,
         country_code,
-        count()                                    AS plantings,
-        countIf(outcome = 'harvested')             AS harvested,
-        sum(area_ha)                               AS area_ha,
-        sum(if(yield_t_ha IS NULL, 0, area_ha))    AS harvested_area_ha,
-        sum(yield_tonnes)                          AS yield_tonnes,
-        sum(revenue_usd)                           AS revenue_usd,
-        sum(cost_total_usd)                        AS cost_total_usd,
-        sum(gross_margin_usd)                      AS gross_margin_usd,
-        sum(irrigation_mm)                         AS irrigation_mm,
-        sum(rainfall_mm)                           AS rainfall_mm,
-        avg(water_use_efficiency_t_per_100mm)      AS water_use_efficiency_t_per_100mm,
-        avg(gdd_accumulated)                       AS gdd_accumulated
-    FROM agg_planting_economics
+        count()                                     AS plantings,
+        countIf(outcome = 'harvested')              AS harvested,
+        sum(p.area_ha)                              AS area_ha,
+        -- `p.` is load-bearing: unqualified, `area_ha` here would resolve to
+        -- the `sum(area_ha) AS area_ha` alias above and nest one aggregate
+        -- inside another, which ClickHouse rejects.
+        sum(if(p.yield_t_ha IS NULL, 0, p.area_ha)) AS harvested_area_ha,
+        sum(p.yield_tonnes)                         AS yield_tonnes,
+        sum(p.revenue_usd)                          AS revenue_usd,
+        sum(p.cost_total_usd)                       AS cost_total_usd,
+        sum(p.gross_margin_usd)                     AS gross_margin_usd,
+        sum(p.irrigation_mm)                        AS irrigation_mm,
+        sum(p.rainfall_mm)                          AS rainfall_mm,
+        avg(p.water_use_efficiency_t_per_100mm)     AS water_use_efficiency_t_per_100mm,
+        avg(p.gdd_accumulated)                      AS gdd_accumulated
+    FROM agg_planting_economics AS p
     GROUP BY season, crop_code, crop_name, crop_category, region, country_code
 );
 
