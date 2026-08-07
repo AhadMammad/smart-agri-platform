@@ -100,31 +100,38 @@ WHERE i.is_actual;
 
 -- Monthly water summary per field: applied, fallen, evaporated, and how many
 -- days ran a deficit.
+--
+-- The ratio is computed in an outer SELECT over the totals rather than beside
+-- them. ClickHouse resolves a bare column name to a SELECT alias where one
+-- exists, so `sum(irrigation_mm)` next to `... AS irrigation_mm` reads as an
+-- aggregate over an aggregate and is rejected outright.
 CREATE VIEW IF NOT EXISTS v_field_irrigation_monthly AS
 SELECT
-    toStartOfMonth(water_date)            AS month_start,
-    field_id,
-    field_code,
-    farm_code,
-    region,
-    any(field_area_ha)                    AS field_area_ha,
-    sum(irrigation_events)                AS irrigation_events,
-    sum(irrigation_mm)                    AS irrigation_mm,
-    sum(water_volume_m3)                  AS water_volume_m3,
-    sum(energy_kwh)                       AS energy_kwh,
-    sum(rainfall_mm)                      AS rainfall_mm,
-    sum(et0_mm)                           AS et0_mm,
-    sum(water_supplied_mm)                AS water_supplied_mm,
-    sum(water_deficit_mm)                 AS water_deficit_mm,
-    countIf(supply_status = 'deficit')    AS deficit_days,
-    -- What share of the water this field received was paid for rather than
-    -- fallen from the sky. The headline irrigation-dependence number.
-    if(sum(water_supplied_mm) > 0,
-       sum(irrigation_mm) / sum(water_supplied_mm) * 100,
-       NULL)                              AS irrigation_share_pct
-FROM agg_field_irrigation_daily
-WHERE is_actual
-GROUP BY month_start, field_id, field_code, farm_code, region;
+    *,
+    if(water_supplied_mm > 0, irrigation_mm / water_supplied_mm * 100, NULL)
+        AS irrigation_share_pct
+FROM
+(
+    SELECT
+        toStartOfMonth(water_date)         AS month_start,
+        field_id,
+        field_code,
+        farm_code,
+        region,
+        any(field_area_ha)                 AS field_area_ha,
+        sum(irrigation_events)             AS irrigation_events,
+        sum(irrigation_mm)                 AS irrigation_mm,
+        sum(water_volume_m3)               AS water_volume_m3,
+        sum(energy_kwh)                    AS energy_kwh,
+        sum(rainfall_mm)                   AS rainfall_mm,
+        sum(et0_mm)                        AS et0_mm,
+        sum(water_supplied_mm)             AS water_supplied_mm,
+        sum(water_deficit_mm)              AS water_deficit_mm,
+        countIf(supply_status = 'deficit') AS deficit_days
+    FROM agg_field_irrigation_daily
+    WHERE is_actual
+    GROUP BY month_start, field_id, field_code, farm_code, region
+);
 
 
 -- --- Machinery & fleet -------------------------------------------------------
@@ -132,33 +139,36 @@ GROUP BY month_start, field_id, field_code, farm_code, region;
 -- Fleet utilisation per machine over its whole series, for the ranking tables.
 CREATE VIEW IF NOT EXISTS v_machine_utilisation AS
 SELECT
-    machine_id,
-    machine_code,
-    machine_type,
-    manufacturer,
-    model,
-    farm_code,
-    region,
-    min(activity_date)                        AS first_active_on,
-    max(activity_date)                        AS last_active_on,
-    count()                                   AS days_observed,
-    countIf(utilisation_status = 'working')   AS working_days,
-    countIf(utilisation_status = 'idle')      AS idle_days,
-    countIf(utilisation_status = 'parked')    AS parked_days,
-    countIf(utilisation_status = 'down')      AS down_days,
-    sum(operation_hours)                      AS operation_hours,
-    sum(area_covered_ha)                      AS area_covered_ha,
-    sum(fuel_used_litres)                     AS fuel_used_litres,
-    if(sum(area_covered_ha) > 0,
-       sum(fuel_used_litres) / sum(area_covered_ha),
-       NULL)                                  AS fuel_per_ha,
-    avg(idle_ratio_pct)                       AS avg_idle_ratio_pct,
-    sum(faults)                               AS faults,
-    sum(critical_faults)                      AS critical_faults,
-    sum(downtime_hours)                       AS downtime_hours,
-    sum(repair_cost_usd)                      AS repair_cost_usd
-FROM agg_machine_daily
-GROUP BY machine_id, machine_code, machine_type, manufacturer, model, farm_code, region;
+    *,
+    if(area_covered_ha > 0, fuel_used_litres / area_covered_ha, NULL) AS fuel_per_ha
+FROM
+(
+    SELECT
+        machine_id,
+        machine_code,
+        machine_type,
+        manufacturer,
+        model,
+        farm_code,
+        region,
+        min(activity_date)                      AS first_active_on,
+        max(activity_date)                      AS last_active_on,
+        count()                                 AS days_observed,
+        countIf(utilisation_status = 'working') AS working_days,
+        countIf(utilisation_status = 'idle')    AS idle_days,
+        countIf(utilisation_status = 'parked')  AS parked_days,
+        countIf(utilisation_status = 'down')    AS down_days,
+        sum(operation_hours)                    AS operation_hours,
+        sum(area_covered_ha)                    AS area_covered_ha,
+        sum(fuel_used_litres)                   AS fuel_used_litres,
+        avg(idle_ratio_pct)                     AS avg_idle_ratio_pct,
+        sum(faults)                             AS faults,
+        sum(critical_faults)                    AS critical_faults,
+        sum(downtime_hours)                     AS downtime_hours,
+        sum(repair_cost_usd)                    AS repair_cost_usd
+    FROM agg_machine_daily
+    GROUP BY machine_id, machine_code, machine_type, manufacturer, model, farm_code, region
+);
 
 
 -- Machines currently needing attention: the most recent day each reported, kept
@@ -194,31 +204,37 @@ WHERE m.utilisation_status = 'down' OR m.open_faults > 0;
 -- Season and crop rollup: the margin and efficiency league table.
 CREATE VIEW IF NOT EXISTS v_crop_season_economics AS
 SELECT
-    season,
-    crop_code,
-    crop_name,
-    crop_category,
-    region,
-    country_code,
-    count()                                     AS plantings,
-    countIf(outcome = 'harvested')              AS harvested,
-    sum(area_ha)                                AS area_ha,
-    sum(yield_tonnes)                           AS yield_tonnes,
+    *,
     -- Area-weighted, not a mean of means: averaging per-hectare yields across
-    -- fields of different sizes over-weights the small ones.
-    if(sum(if(yield_t_ha IS NULL, 0, area_ha)) > 0,
-       sum(yield_tonnes) / sum(if(yield_t_ha IS NULL, 0, area_ha)),
-       NULL)                                    AS yield_t_ha,
-    sum(revenue_usd)                            AS revenue_usd,
-    sum(cost_total_usd)                         AS cost_total_usd,
-    sum(gross_margin_usd)                       AS gross_margin_usd,
-    if(sum(area_ha) > 0, sum(gross_margin_usd) / sum(area_ha), NULL) AS margin_per_ha_usd,
-    sum(irrigation_mm)                          AS irrigation_mm,
-    sum(rainfall_mm)                            AS rainfall_mm,
-    avg(water_use_efficiency_t_per_100mm)       AS water_use_efficiency_t_per_100mm,
-    avg(gdd_accumulated)                        AS gdd_accumulated
-FROM agg_planting_economics
-GROUP BY season, crop_code, crop_name, crop_category, region, country_code;
+    -- fields of different sizes over-weights the small ones. Only the area that
+    -- actually produced a yield counts, or a half-harvested season reads as a
+    -- collapse in yield rather than a season still in progress.
+    if(harvested_area_ha > 0, yield_tonnes / harvested_area_ha, NULL) AS yield_t_ha,
+    if(area_ha > 0, gross_margin_usd / area_ha, NULL)                 AS margin_per_ha_usd
+FROM
+(
+    SELECT
+        season,
+        crop_code,
+        crop_name,
+        crop_category,
+        region,
+        country_code,
+        count()                                    AS plantings,
+        countIf(outcome = 'harvested')             AS harvested,
+        sum(area_ha)                               AS area_ha,
+        sum(if(yield_t_ha IS NULL, 0, area_ha))    AS harvested_area_ha,
+        sum(yield_tonnes)                          AS yield_tonnes,
+        sum(revenue_usd)                           AS revenue_usd,
+        sum(cost_total_usd)                        AS cost_total_usd,
+        sum(gross_margin_usd)                      AS gross_margin_usd,
+        sum(irrigation_mm)                         AS irrigation_mm,
+        sum(rainfall_mm)                           AS rainfall_mm,
+        avg(water_use_efficiency_t_per_100mm)      AS water_use_efficiency_t_per_100mm,
+        avg(gdd_accumulated)                       AS gdd_accumulated
+    FROM agg_planting_economics
+    GROUP BY season, crop_code, crop_name, crop_category, region, country_code
+);
 
 
 -- Cost structure per planting, long rather than wide, so a stacked chart reads
@@ -238,18 +254,23 @@ ARRAY JOIN
 -- Farm-level scorecard, for the top-line tiles across all four dashboards.
 CREATE VIEW IF NOT EXISTS v_farm_scorecard AS
 SELECT
-    farm_id,
-    farm_code,
-    region,
-    country_code,
-    count()                               AS plantings,
-    sum(area_ha)                          AS area_ha,
-    sum(yield_tonnes)                     AS yield_tonnes,
-    sum(revenue_usd)                      AS revenue_usd,
-    sum(cost_total_usd)                   AS cost_total_usd,
-    sum(gross_margin_usd)                 AS gross_margin_usd,
-    if(sum(area_ha) > 0, sum(gross_margin_usd) / sum(area_ha), NULL) AS margin_per_ha_usd,
-    sum(irrigation_mm)                    AS irrigation_mm,
-    sum(rainfall_mm)                      AS rainfall_mm
-FROM agg_planting_economics
-GROUP BY farm_id, farm_code, region, country_code;
+    *,
+    if(area_ha > 0, gross_margin_usd / area_ha, NULL) AS margin_per_ha_usd
+FROM
+(
+    SELECT
+        farm_id,
+        farm_code,
+        region,
+        country_code,
+        count()               AS plantings,
+        sum(area_ha)          AS area_ha,
+        sum(yield_tonnes)     AS yield_tonnes,
+        sum(revenue_usd)      AS revenue_usd,
+        sum(cost_total_usd)   AS cost_total_usd,
+        sum(gross_margin_usd) AS gross_margin_usd,
+        sum(irrigation_mm)    AS irrigation_mm,
+        sum(rainfall_mm)      AS rainfall_mm
+    FROM agg_planting_economics
+    GROUP BY farm_id, farm_code, region, country_code
+);
