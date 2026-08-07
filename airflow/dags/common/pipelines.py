@@ -115,6 +115,43 @@ IMAGERY_STAGES: tuple[tuple[str, ...], ...] = (
     ("silver.dim_field", "silver.fact_field_index"),
 )
 
+#: Phase 6. The marts and the warehouse load, across every domain at once.
+#:
+#: Runs last and alone: a mart is cross-domain by definition, so folding it into
+#: a domain DAG would mean either re-running half the platform or reading
+#: whatever another DAG happened to leave in the lake.
+ANALYTICS_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "gold.field_crop_health_daily",
+        "gold.field_irrigation_daily",
+        "gold.machine_daily",
+        "gold.planting_economics",
+    ),
+    (
+        # Dimensions
+        "load.dim_region",
+        "load.dim_soil_type",
+        "load.dim_crop",
+        "load.dim_crop_variety",
+        "load.dim_planting",
+        "load.dim_machine",
+        # Facts
+        "load.fact_irrigation",
+        "load.fact_input_application",
+        "load.fact_harvest",
+        "load.fact_field_cost",
+        "load.fact_machine_operation",
+        "load.fact_machine_telemetry",
+        "load.fact_machine_fault",
+        "load.fact_field_index",
+        # Marts
+        "load.field_crop_health_daily",
+        "load.field_irrigation_daily",
+        "load.machine_daily",
+        "load.planting_economics",
+    ),
+)
+
 #: Every domain the platform schedules, by name.
 DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
     "soil_sensor": SOIL_SENSOR_STAGES,
@@ -123,10 +160,14 @@ DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
     "operations": OPERATIONS_STAGES,
     "machinery": MACHINERY_STAGES,
     "imagery": IMAGERY_STAGES,
+    "analytics": ANALYTICS_STAGES,
 }
 
 #: Bronze and Silver stages share these labels across the Phase 5 domains.
 LAKE_STAGE_LABELS: tuple[str, ...] = ("bronze", "silver")
+
+#: The analytics domain is Gold then load, not Bronze then Silver.
+ANALYTICS_STAGE_LABELS: tuple[str, ...] = ("gold", "load")
 
 
 def task_id_for(pipeline: str) -> str:

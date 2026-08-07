@@ -35,7 +35,58 @@ DRY_THRESHOLD_PCT = 15.0
 WET_THRESHOLD_PCT = 38.0
 
 
-class GoldFieldSoilDailyPipeline(BasePipeline):
+class GoldPipeline(BasePipeline):
+    """Shared plumbing for every Gold aggregate.
+
+    Gold reads dimensions from the current Silver snapshot and facts from every
+    Silver partition, then replaces its own run partition. That combination is
+    what makes a Gold table a full recompute: a renamed field shows its new name
+    across all history, and a re-run for the same date is byte-identical.
+    """
+
+    def _read_silver_dim(self, dataset: str, run: RunContext) -> pl.DataFrame:
+        """One Silver dimension, from this run's snapshot partition."""
+        path = self.context.hdfs.zone_path(
+            LakeZone.SILVER, dataset, f"{SNAPSHOT_PARTITION_KEY}={run.partition}", DATA_FILE
+        )
+        return self.context.hdfs.read_parquet(path)
+
+    def _read_silver_facts(self, dataset: str) -> pl.DataFrame:
+        """Every partition of a Silver fact.
+
+        A directory read, not a file read: incremental Silver lands one file per
+        batch, so reading a single path would see only the most recent one.
+        """
+        return self.context.hdfs.read_parquet_dir(
+            self.context.hdfs.zone_path(LakeZone.SILVER, dataset), missing_ok=True
+        )
+
+    def _read_gold(self, dataset: str, run: RunContext) -> pl.DataFrame:
+        """Another Gold dataset from this run's partition.
+
+        A missing partition is re-raised with the cause named. The bare fsspec
+        error says only that a path is absent, which sends whoever is on call
+        looking at HDFS rather than at the upstream pipeline that never ran.
+        """
+        path = self.context.hdfs.zone_path(
+            LakeZone.GOLD, dataset, f"{RUN_PARTITION_KEY}={run.partition}", DATA_FILE
+        )
+        try:
+            return self.context.hdfs.read_parquet(path)
+        except FileNotFoundError as exc:
+            msg = (
+                f"{self.name} needs gold.{dataset} for {run.partition}, which has not "
+                f"been built. Run that pipeline first — {path} does not exist."
+            )
+            raise FileNotFoundError(msg) from exc
+
+    def load(self, frame: pl.DataFrame, run: RunContext) -> int:
+        directory = self._partition_path(LakeZone.GOLD, RUN_PARTITION_KEY, run)
+        self.context.hdfs.remove(directory)
+        return self.context.hdfs.write_parquet(frame, f"{directory}/{DATA_FILE}")
+
+
+class GoldFieldSoilDailyPipeline(GoldPipeline):
     """Daily soil metrics per field."""
 
     name = "gold.field_soil_daily"
@@ -130,14 +181,3 @@ class GoldFieldSoilDailyPipeline(BasePipeline):
             .select(GOLD_FIELD_SOIL_DAILY.columns.keys())
             .sort("reading_date", "field_id")
         )
-
-    def load(self, frame: pl.DataFrame, run: RunContext) -> int:
-        directory = self._partition_path(LakeZone.GOLD, RUN_PARTITION_KEY, run)
-        self.context.hdfs.remove(directory)
-        return self.context.hdfs.write_parquet(frame, f"{directory}/{DATA_FILE}")
-
-    def _read_silver_dim(self, dataset: str, run: RunContext) -> pl.DataFrame:
-        path = self.context.hdfs.zone_path(
-            LakeZone.SILVER, dataset, f"{SNAPSHOT_PARTITION_KEY}={run.partition}", DATA_FILE
-        )
-        return self.context.hdfs.read_parquet(path)

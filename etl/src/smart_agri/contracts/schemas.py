@@ -785,3 +785,215 @@ SILVER_FACT_FIELD_INDEX = pa.DataFrameSchema(
     strict=True,
     name="silver_fact_field_index",
 )
+
+
+# --- Gold, Phase 6 -----------------------------------------------------------
+#
+# The marts the dashboards read. Each one is denormalised to the grain a chart
+# asks its question at, with the dimension attributes carried on the row, so a
+# dashboard question is one query with no joins.
+#
+# Nullability here is meaningful rather than defensive. A field with no imagery
+# pass has an unknown canopy stage, not a bare one; a planting still growing has
+# no yield, not a yield of zero. Collapsing either into a number would put a
+# fabricated value on a chart.
+
+_GNUM = pa.Column(polars_engine.Float64, nullable=True)
+_GCOUNT = pa.Column(polars_engine.Int64, pa.Check.ge(0))
+_GMONEY = pa.Column(polars_engine.Float64, pa.Check.ge(0))
+_GID = pa.Column(polars_engine.Int64)
+_GTEXT = pa.Column(polars_engine.String)
+_GOPT_ID = pa.Column(polars_engine.Int64, nullable=True)
+_GOPT_TEXT = pa.Column(polars_engine.String, nullable=True)
+_GOPT_DAY = pa.Column(polars_engine.Date, nullable=True)
+_GPCT = pa.Column(polars_engine.Float64, pa.Check.in_range(0, 100), nullable=True)
+_GINDEX = pa.Column(polars_engine.Float64, pa.Check.in_range(-1, 1), nullable=True)
+
+
+GOLD_FIELD_CROP_HEALTH_DAILY = pa.DataFrameSchema(
+    {
+        "observed_on": pa.Column(polars_engine.Date),
+        "field_id": _GID,
+        "field_code": _GTEXT,
+        "field_name": _GTEXT,
+        "farm_id": _GID,
+        "farm_code": _GTEXT,
+        "region": _GTEXT,
+        "country_code": _GTEXT,
+        "soil_type": _GTEXT,
+        "field_area_ha": pa.Column(polars_engine.Float64, pa.Check.gt(0)),
+        # Null when the observation predates or follows every planting on the
+        # field — bare ground between cycles is a real state, not a join failure.
+        "planting_id": _GOPT_ID,
+        "season": _GOPT_TEXT,
+        "crop_code": _GOPT_TEXT,
+        "crop_name": _GOPT_TEXT,
+        "crop_category": _GOPT_TEXT,
+        "variety_code": _GOPT_TEXT,
+        "days_after_sowing": pa.Column(polars_engine.Int32, nullable=True),
+        "cycle_progress_pct": pa.Column(
+            polars_engine.Float64, pa.Check.in_range(0, 200), nullable=True
+        ),
+        "observation_count": _GCOUNT,
+        "avg_ndvi": _GINDEX,
+        "max_ndvi": _GINDEX,
+        "avg_ndwi": _GINDEX,
+        "avg_evi": _GINDEX,
+        "avg_cloud_cover_pct": _GPCT,
+        # The crop's own peak, so vigour is judged against what this crop can
+        # reach rather than against a fleet-wide constant.
+        "peak_ndvi_expected": pa.Column(
+            polars_engine.Float64, pa.Check.in_range(0, 1), nullable=True
+        ),
+        "ndvi_vs_expected_pct": pa.Column(polars_engine.Float64, pa.Check.ge(0), nullable=True),
+        "canopy_stage": pa.Column(
+            polars_engine.String,
+            pa.Check.isin(["bare", "developing", "peak", "senescing", "unknown"]),
+        ),
+        "vigour_flag": pa.Column(
+            polars_engine.String, pa.Check.isin(["low", "normal", "high", "unknown"])
+        ),
+    },
+    strict=True,
+    name="gold_field_crop_health_daily",
+)
+
+
+GOLD_FIELD_IRRIGATION_DAILY = pa.DataFrameSchema(
+    {
+        "water_date": pa.Column(polars_engine.Date),
+        "field_id": _GID,
+        "field_code": _GTEXT,
+        "farm_id": _GID,
+        "farm_code": _GTEXT,
+        "region": _GTEXT,
+        "country_code": _GTEXT,
+        "soil_type": _GTEXT,
+        "field_area_ha": pa.Column(polars_engine.Float64, pa.Check.gt(0)),
+        # Zero on a day nothing was applied. The row still exists because the
+        # series is built from the weather spine: a deficit day with no
+        # irrigation is exactly the day the dashboard needs to show.
+        "irrigation_events": _GCOUNT,
+        "irrigation_mm": _GMONEY,
+        "water_volume_m3": _GMONEY,
+        "irrigation_minutes": _GCOUNT,
+        "energy_kwh": _GNUM,
+        "irrigation_method": pa.Column(polars_engine.String),
+        "rainfall_mm": _GNUM,
+        "et0_mm": _GNUM,
+        "water_supplied_mm": _GNUM,
+        # Positive means the crop's demand exceeded what it received.
+        "water_deficit_mm": _GNUM,
+        "irrigation_share_pct": _GPCT,
+        "is_actual": pa.Column(polars_engine.Bool),
+        "supply_status": pa.Column(
+            polars_engine.String,
+            pa.Check.isin(["deficit", "balanced", "surplus", "unknown"]),
+        ),
+    },
+    strict=True,
+    name="gold_field_irrigation_daily",
+)
+
+
+GOLD_MACHINE_DAILY = pa.DataFrameSchema(
+    {
+        "activity_date": pa.Column(polars_engine.Date),
+        "machine_id": _GID,
+        "machine_code": _GTEXT,
+        "machine_type": _GTEXT,
+        "manufacturer": _GTEXT,
+        "model": _GTEXT,
+        "rated_power_hp": pa.Column(polars_engine.Int32, pa.Check.gt(0)),
+        "farm_id": _GID,
+        "farm_code": _GTEXT,
+        "region": _GTEXT,
+        "telemetry_readings": _GCOUNT,
+        "running_readings": _GCOUNT,
+        "idle_readings": _GCOUNT,
+        # Share of running time spent idle. Null when the engine never ran:
+        # a parked machine has no idle ratio, and reporting 0% would put it top
+        # of a "most efficient" chart.
+        "idle_ratio_pct": _GPCT,
+        "engine_hours_end": _GNUM,
+        "avg_fuel_rate_l_per_h": _GNUM,
+        "min_fuel_level_pct": _GPCT,
+        "max_engine_temp_c": _GNUM,
+        "avg_speed_kmh": _GNUM,
+        "operations": _GCOUNT,
+        "operation_hours": _GMONEY,
+        "area_covered_ha": _GMONEY,
+        "fuel_used_litres": _GMONEY,
+        "distance_km": _GNUM,
+        "fuel_per_ha": _GNUM,
+        "faults": _GCOUNT,
+        "critical_faults": _GCOUNT,
+        "open_faults": _GCOUNT,
+        "downtime_hours": _GMONEY,
+        "repair_cost_usd": _GMONEY,
+        "utilisation_status": pa.Column(
+            polars_engine.String,
+            pa.Check.isin(["working", "idle", "parked", "down"]),
+        ),
+    },
+    strict=True,
+    name="gold_machine_daily",
+)
+
+
+GOLD_PLANTING_ECONOMICS = pa.DataFrameSchema(
+    {
+        "planting_id": pa.Column(polars_engine.Int64, unique=True),
+        "field_id": _GID,
+        "field_code": _GTEXT,
+        "farm_id": _GID,
+        "farm_code": _GTEXT,
+        "region": _GTEXT,
+        "country_code": _GTEXT,
+        "soil_type": _GTEXT,
+        "season": _GTEXT,
+        "planted_on": pa.Column(polars_engine.Date),
+        "expected_harvest_on": pa.Column(polars_engine.Date),
+        "status": _GTEXT,
+        "crop_code": _GTEXT,
+        "crop_name": _GTEXT,
+        "crop_category": _GTEXT,
+        "variety_code": _GTEXT,
+        "variety_name": _GTEXT,
+        "area_ha": pa.Column(polars_engine.Float64, pa.Check.gt(0)),
+        # Null while the crop is still in the ground. Zero would read as a
+        # total crop failure on every yield chart.
+        "harvested_on": _GOPT_DAY,
+        "yield_tonnes": pa.Column(polars_engine.Float64, pa.Check.ge(0), nullable=True),
+        "yield_t_ha": pa.Column(polars_engine.Float64, pa.Check.ge(0), nullable=True),
+        "quality_grade": _GOPT_TEXT,
+        "revenue_usd": pa.Column(polars_engine.Float64, pa.Check.ge(0), nullable=True),
+        "cost_total_usd": _GMONEY,
+        "cost_seed_usd": _GMONEY,
+        "cost_fertilizer_usd": _GMONEY,
+        "cost_crop_protection_usd": _GMONEY,
+        "cost_irrigation_usd": _GMONEY,
+        "cost_fuel_usd": _GMONEY,
+        "cost_labour_usd": _GMONEY,
+        "cost_machinery_usd": _GMONEY,
+        "cost_other_usd": _GMONEY,
+        "cost_per_ha_usd": _GMONEY,
+        "gross_margin_usd": _GNUM,
+        "margin_per_ha_usd": _GNUM,
+        "input_applications": _GCOUNT,
+        "irrigation_events": _GCOUNT,
+        "irrigation_mm": _GMONEY,
+        "rainfall_mm": _GNUM,
+        "water_received_mm": _GNUM,
+        "gdd_accumulated": _GNUM,
+        # Tonnes per hectare per 100 mm of water received — the headline
+        # efficiency number, and the reason water and yield share a mart.
+        "water_use_efficiency_t_per_100mm": _GNUM,
+        "outcome": pa.Column(
+            polars_engine.String,
+            pa.Check.isin(["harvested", "growing", "failed", "terminated"]),
+        ),
+    },
+    strict=True,
+    name="gold_planting_economics",
+)

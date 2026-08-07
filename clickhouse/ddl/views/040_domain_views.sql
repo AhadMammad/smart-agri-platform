@@ -1,0 +1,255 @@
+-- Views completing the four dashboards.
+--
+-- The marts answer the daily questions directly. These cover the rollups and
+-- "current state" questions that would otherwise be a GROUP BY or a
+-- self-join rebuilt in every chart — and rebuilt slightly differently each
+-- time, which is how two tiles on one dashboard end up disagreeing.
+
+-- --- Field & crop health -----------------------------------------------------
+
+-- Latest canopy state per field, for the status tiles.
+CREATE VIEW IF NOT EXISTS v_field_latest_crop_health AS
+SELECT
+    h.field_id,
+    h.field_code,
+    h.field_name,
+    h.farm_code,
+    h.region,
+    h.soil_type,
+    h.field_area_ha,
+    h.observed_on AS last_observed_on,
+    h.crop_code,
+    h.crop_name,
+    h.season,
+    h.days_after_sowing,
+    h.cycle_progress_pct,
+    h.avg_ndvi,
+    h.ndvi_vs_expected_pct,
+    h.canopy_stage,
+    h.vigour_flag
+FROM agg_field_crop_health_daily AS h
+INNER JOIN
+(
+    SELECT field_id, max(observed_on) AS observed_on
+    FROM agg_field_crop_health_daily
+    GROUP BY field_id
+) AS latest
+ON h.field_id = latest.field_id AND h.observed_on = latest.observed_on;
+
+
+-- The canopy curve per planting: NDVI against cycle progress, which is the
+-- shape the agronomy model is asserted to produce.
+CREATE VIEW IF NOT EXISTS v_planting_ndvi_curve AS
+SELECT
+    planting_id,
+    crop_code,
+    crop_name,
+    season,
+    region,
+    field_code,
+    observed_on,
+    days_after_sowing,
+    cycle_progress_pct,
+    canopy_stage,
+    avg_ndvi,
+    peak_ndvi_expected,
+    ndvi_vs_expected_pct
+FROM agg_field_crop_health_daily
+WHERE planting_id IS NOT NULL;
+
+
+-- --- Irrigation & water ------------------------------------------------------
+
+-- Irrigation, rainfall and the soil's response, per field per day.
+--
+-- This is the join the platform exists to make possible: what was applied, what
+-- fell, what evaporated, and what the probes measured — in one row.
+-- Restricted to actuals, for the same reason `v_field_water_daily` is: a
+-- forecast rainfall figure compared against a measured moisture reading shows a
+-- relationship partly produced by the forecast model.
+CREATE VIEW IF NOT EXISTS v_field_water_supply_daily AS
+SELECT
+    i.water_date,
+    i.field_id,
+    i.field_code,
+    i.farm_code,
+    i.region,
+    i.country_code,
+    i.soil_type,
+    i.field_area_ha,
+    i.irrigation_events,
+    i.irrigation_mm,
+    i.water_volume_m3,
+    i.energy_kwh,
+    i.irrigation_method,
+    i.rainfall_mm,
+    i.et0_mm,
+    i.water_supplied_mm,
+    i.water_deficit_mm,
+    i.irrigation_share_pct,
+    i.supply_status,
+    s.avg_soil_moisture_pct,
+    s.min_soil_moisture_pct,
+    s.moisture_stress,
+    s.active_sensors
+FROM agg_field_irrigation_daily AS i
+LEFT JOIN agg_field_soil_daily AS s
+    ON i.field_id = s.field_id AND i.water_date = s.reading_date
+WHERE i.is_actual;
+
+
+-- Monthly water summary per field: applied, fallen, evaporated, and how many
+-- days ran a deficit.
+CREATE VIEW IF NOT EXISTS v_field_irrigation_monthly AS
+SELECT
+    toStartOfMonth(water_date)            AS month_start,
+    field_id,
+    field_code,
+    farm_code,
+    region,
+    any(field_area_ha)                    AS field_area_ha,
+    sum(irrigation_events)                AS irrigation_events,
+    sum(irrigation_mm)                    AS irrigation_mm,
+    sum(water_volume_m3)                  AS water_volume_m3,
+    sum(energy_kwh)                       AS energy_kwh,
+    sum(rainfall_mm)                      AS rainfall_mm,
+    sum(et0_mm)                           AS et0_mm,
+    sum(water_supplied_mm)                AS water_supplied_mm,
+    sum(water_deficit_mm)                 AS water_deficit_mm,
+    countIf(supply_status = 'deficit')    AS deficit_days,
+    -- What share of the water this field received was paid for rather than
+    -- fallen from the sky. The headline irrigation-dependence number.
+    if(sum(water_supplied_mm) > 0,
+       sum(irrigation_mm) / sum(water_supplied_mm) * 100,
+       NULL)                              AS irrigation_share_pct
+FROM agg_field_irrigation_daily
+WHERE is_actual
+GROUP BY month_start, field_id, field_code, farm_code, region;
+
+
+-- --- Machinery & fleet -------------------------------------------------------
+
+-- Fleet utilisation per machine over its whole series, for the ranking tables.
+CREATE VIEW IF NOT EXISTS v_machine_utilisation AS
+SELECT
+    machine_id,
+    machine_code,
+    machine_type,
+    manufacturer,
+    model,
+    farm_code,
+    region,
+    min(activity_date)                        AS first_active_on,
+    max(activity_date)                        AS last_active_on,
+    count()                                   AS days_observed,
+    countIf(utilisation_status = 'working')   AS working_days,
+    countIf(utilisation_status = 'idle')      AS idle_days,
+    countIf(utilisation_status = 'parked')    AS parked_days,
+    countIf(utilisation_status = 'down')      AS down_days,
+    sum(operation_hours)                      AS operation_hours,
+    sum(area_covered_ha)                      AS area_covered_ha,
+    sum(fuel_used_litres)                     AS fuel_used_litres,
+    if(sum(area_covered_ha) > 0,
+       sum(fuel_used_litres) / sum(area_covered_ha),
+       NULL)                                  AS fuel_per_ha,
+    avg(idle_ratio_pct)                       AS avg_idle_ratio_pct,
+    sum(faults)                               AS faults,
+    sum(critical_faults)                      AS critical_faults,
+    sum(downtime_hours)                       AS downtime_hours,
+    sum(repair_cost_usd)                      AS repair_cost_usd
+FROM agg_machine_daily
+GROUP BY machine_id, machine_code, machine_type, manufacturer, model, farm_code, region;
+
+
+-- Machines currently needing attention: the most recent day each reported, kept
+-- only where that day was down or carried an open fault.
+CREATE VIEW IF NOT EXISTS v_machine_attention AS
+SELECT
+    m.machine_id,
+    m.machine_code,
+    m.machine_type,
+    m.farm_code,
+    m.region,
+    m.activity_date AS last_activity_date,
+    m.utilisation_status,
+    m.open_faults,
+    m.critical_faults,
+    m.downtime_hours,
+    m.repair_cost_usd,
+    m.min_fuel_level_pct,
+    m.max_engine_temp_c
+FROM agg_machine_daily AS m
+INNER JOIN
+(
+    SELECT machine_id, max(activity_date) AS activity_date
+    FROM agg_machine_daily
+    GROUP BY machine_id
+) AS latest
+ON m.machine_id = latest.machine_id AND m.activity_date = latest.activity_date
+WHERE m.utilisation_status = 'down' OR m.open_faults > 0;
+
+
+-- --- Yield & economics -------------------------------------------------------
+
+-- Season and crop rollup: the margin and efficiency league table.
+CREATE VIEW IF NOT EXISTS v_crop_season_economics AS
+SELECT
+    season,
+    crop_code,
+    crop_name,
+    crop_category,
+    region,
+    country_code,
+    count()                                     AS plantings,
+    countIf(outcome = 'harvested')              AS harvested,
+    sum(area_ha)                                AS area_ha,
+    sum(yield_tonnes)                           AS yield_tonnes,
+    -- Area-weighted, not a mean of means: averaging per-hectare yields across
+    -- fields of different sizes over-weights the small ones.
+    if(sum(if(yield_t_ha IS NULL, 0, area_ha)) > 0,
+       sum(yield_tonnes) / sum(if(yield_t_ha IS NULL, 0, area_ha)),
+       NULL)                                    AS yield_t_ha,
+    sum(revenue_usd)                            AS revenue_usd,
+    sum(cost_total_usd)                         AS cost_total_usd,
+    sum(gross_margin_usd)                       AS gross_margin_usd,
+    if(sum(area_ha) > 0, sum(gross_margin_usd) / sum(area_ha), NULL) AS margin_per_ha_usd,
+    sum(irrigation_mm)                          AS irrigation_mm,
+    sum(rainfall_mm)                            AS rainfall_mm,
+    avg(water_use_efficiency_t_per_100mm)       AS water_use_efficiency_t_per_100mm,
+    avg(gdd_accumulated)                        AS gdd_accumulated
+FROM agg_planting_economics
+GROUP BY season, crop_code, crop_name, crop_category, region, country_code;
+
+
+-- Cost structure per planting, long rather than wide, so a stacked chart reads
+-- it without naming eight columns.
+CREATE VIEW IF NOT EXISTS v_planting_cost_breakdown AS
+SELECT planting_id, field_code, farm_code, region, season, crop_code, area_ha,
+       category, amount_usd,
+       if(cost_total_usd > 0, amount_usd / cost_total_usd * 100, NULL) AS share_pct
+FROM agg_planting_economics
+ARRAY JOIN
+    ['seed', 'fertilizer', 'crop_protection', 'irrigation',
+     'fuel', 'labour', 'machinery', 'other'] AS category,
+    [cost_seed_usd, cost_fertilizer_usd, cost_crop_protection_usd, cost_irrigation_usd,
+     cost_fuel_usd, cost_labour_usd, cost_machinery_usd, cost_other_usd] AS amount_usd;
+
+
+-- Farm-level scorecard, for the top-line tiles across all four dashboards.
+CREATE VIEW IF NOT EXISTS v_farm_scorecard AS
+SELECT
+    farm_id,
+    farm_code,
+    region,
+    country_code,
+    count()                               AS plantings,
+    sum(area_ha)                          AS area_ha,
+    sum(yield_tonnes)                     AS yield_tonnes,
+    sum(revenue_usd)                      AS revenue_usd,
+    sum(cost_total_usd)                   AS cost_total_usd,
+    sum(gross_margin_usd)                 AS gross_margin_usd,
+    if(sum(area_ha) > 0, sum(gross_margin_usd) / sum(area_ha), NULL) AS margin_per_ha_usd,
+    sum(irrigation_mm)                    AS irrigation_mm,
+    sum(rainfall_mm)                      AS rainfall_mm
+FROM agg_planting_economics
+GROUP BY farm_id, farm_code, region, country_code;

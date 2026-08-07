@@ -21,11 +21,19 @@ from smart_agri.pipelines.bronze import (
     BronzeSnapshotPipeline,
 )
 from smart_agri.pipelines.gold import GoldFieldSoilDailyPipeline
+from smart_agri.pipelines.gold_marts import (
+    GoldFieldCropHealthDailyPipeline,
+    GoldFieldIrrigationDailyPipeline,
+    GoldMachineDailyPipeline,
+    GoldPlantingEconomicsPipeline,
+)
 from smart_agri.pipelines.load import (
     DIM_LOAD_SPECS,
+    FACT_LOAD_SPECS,
+    GOLD_LOAD_SPECS,
     LoadDimensionPipeline,
-    LoadFactSensorReadingPipeline,
-    LoadGoldFieldSoilDailyPipeline,
+    LoadFactPipeline,
+    LoadGoldPipeline,
 )
 from smart_agri.pipelines.silver_spec import SilverPipeline
 from smart_agri.pipelines.silver_specs import SILVER_SPECS
@@ -68,11 +76,16 @@ _REGISTRY: dict[str, PipelineFactory] = {
     },
     # --- Silver: one entry per declared spec ---
     **{f"silver.{spec.dataset}": _bind(SilverPipeline, spec) for spec in SILVER_SPECS},
-    # --- Gold and load (Phase 2 slice) ---
+    # --- Gold: the marts, one per analytics domain ---
     "gold.field_soil_daily": GoldFieldSoilDailyPipeline,
+    "gold.field_crop_health_daily": GoldFieldCropHealthDailyPipeline,
+    "gold.field_irrigation_daily": GoldFieldIrrigationDailyPipeline,
+    "gold.machine_daily": GoldMachineDailyPipeline,
+    "gold.planting_economics": GoldPlantingEconomicsPipeline,
+    # --- Load: one entry per declared spec, across all three shapes ---
     **{f"load.{spec.dataset}": _bind(LoadDimensionPipeline, spec) for spec in DIM_LOAD_SPECS},
-    "load.fact_sensor_reading": LoadFactSensorReadingPipeline,
-    "load.field_soil_daily": LoadGoldFieldSoilDailyPipeline,
+    **{f"load.{spec.dataset}": _bind(LoadFactPipeline, spec) for spec in FACT_LOAD_SPECS},
+    **{f"load.{spec.dataset}": _bind(LoadGoldPipeline, spec) for spec in GOLD_LOAD_SPECS},
     # --- Weather (Phase 4) ---
     "bronze.weather_archive": BronzeWeatherArchivePipeline,
     "bronze.weather_forecast": BronzeWeatherForecastPipeline,
@@ -174,6 +187,49 @@ IMAGERY_STAGES: tuple[tuple[str, ...], ...] = (
     ("silver.dim_field", "silver.fact_field_index"),
 )
 
+#: Phase 6. The marts and the warehouse load, across every domain at once.
+#:
+#: Deliberately not folded into the domain DAGs. The Phase 5 domains each stand
+#: alone because their Silver only needs their own Bronze — but a mart is
+#: cross-domain by definition. `field_irrigation_daily` needs weather *and*
+#: operations; `planting_economics` needs operations, weather and imagery. A
+#: domain DAG that built it would either re-run half the platform or quietly
+#: read whatever another DAG happened to leave behind.
+#:
+#: So this stage runs last, reads Silver and the weather Gold from the lake, and
+#: is the only place the warehouse is written.
+ANALYTICS_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "gold.field_crop_health_daily",
+        "gold.field_irrigation_daily",
+        "gold.machine_daily",
+        "gold.planting_economics",
+    ),
+    (
+        # Dimensions
+        "load.dim_region",
+        "load.dim_soil_type",
+        "load.dim_crop",
+        "load.dim_crop_variety",
+        "load.dim_planting",
+        "load.dim_machine",
+        # Facts
+        "load.fact_irrigation",
+        "load.fact_input_application",
+        "load.fact_harvest",
+        "load.fact_field_cost",
+        "load.fact_machine_operation",
+        "load.fact_machine_telemetry",
+        "load.fact_machine_fault",
+        "load.fact_field_index",
+        # Marts
+        "load.field_crop_health_daily",
+        "load.field_irrigation_daily",
+        "load.machine_daily",
+        "load.planting_economics",
+    ),
+)
+
 #: Every domain, by name — used by the DAG factory and `smart-agri run-domain`.
 DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
     "soil_sensor": SOIL_SENSOR_STAGES,
@@ -182,6 +238,7 @@ DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
     "operations": OPERATIONS_STAGES,
     "machinery": MACHINERY_STAGES,
     "imagery": IMAGERY_STAGES,
+    "analytics": ANALYTICS_STAGES,
 }
 
 

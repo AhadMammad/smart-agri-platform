@@ -195,6 +195,23 @@ run-all: ## Run the whole soil-sensor slice locally (Airflow runs it as tasks)
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
 	  $(ETL_IMAGE) run-all $(if $(DATE),--date $(DATE),)
 
+.PHONY: run-domain
+run-domain: ## Run one domain's stages; DOMAIN=operations [DATE=YYYY-MM-DD]
+	@test -n "$(DOMAIN)" || { echo "usage: make run-domain DOMAIN=<name> [DATE=...]"; exit 2; }
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) run-domain $(DOMAIN) $(if $(DATE),--date $(DATE),)
+
+.PHONY: lake
+lake: ## Fill every Bronze and Silver zone: reference, operations, machinery, imagery
+	@for domain in reference operations machinery imagery; do \
+	  echo "--- $$domain ---"; \
+	  $(MAKE) --no-print-directory run-domain DOMAIN=$$domain $(if $(DATE),DATE=$(DATE),) || exit 1; \
+	done
+
+.PHONY: analytics
+analytics: ## Build the Gold marts and load the whole ClickHouse star schema
+	$(MAKE) --no-print-directory run-domain DOMAIN=analytics $(if $(DATE),DATE=$(DATE),)
+
 .PHONY: weather-backfill
 weather-backfill: ## Load the full Open-Meteo history for every farm (needs network)
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
@@ -216,6 +233,8 @@ demo: ## Zero to dashboard: migrate, seed, build the warehouse, load, import cha
 	@$(MAKE) --no-print-directory seed
 	@$(MAKE) --no-print-directory run-all
 	@$(MAKE) --no-print-directory weather
+	@$(MAKE) --no-print-directory lake
+	@$(MAKE) --no-print-directory analytics
 	@$(MAKE) --no-print-directory superset-import
 	@echo ""
 	@$(MAKE) --no-print-directory urls
