@@ -202,8 +202,8 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 2 | Thin end-to-end slice: soil sensor readings | **done** | 166,896 readings → ClickHouse in 7 s, 0 quarantined |
 | 3 | Full OLTP schema and data generator | **done** | `make seed` — 15 tables, 180,580 rows in 11 s |
 | 4 | Weather ingestion (Open-Meteo) | **done** | 1,825 archive rows; soil moisture rises with rainfall |
-| 5 | Bronze and Silver for all domains | **next** | Every source table in Bronze and Silver; re-runs idempotent |
-| 6 | Gold layer and full ClickHouse star schema | | Every dashboard question answered by one query |
+| 5 | Bronze and Silver for all domains | **done** | 21 Bronze + 19 Silver datasets; re-runs deduplicate to identical counts; 39 tables in Hive |
+| 6 | Gold layer and full ClickHouse star schema | **next** | Every dashboard question answered by one query |
 | 7 | Superset dashboards as code | | Four dashboards reproduced from an empty stack |
 | 8 | CI, quality gates, documentation | | CI green on a clean checkout; documented path to dashboards |
 
@@ -212,7 +212,7 @@ prediction, anomaly detection).
 
 ### Verification status
 
-Phases 1–4 have been **run on the target VM**, not just built and unit-tested.
+Phases 1–5 have been **run on the target VM**, not just built and unit-tested.
 The full stack — HDFS, Hive Metastore, ClickHouse, Airflow on Celery, Superset —
 comes up, the pipelines move real data end to end, the weather chain calls the
 live Open-Meteo API, and both dashboards query ClickHouse.
@@ -220,6 +220,22 @@ live Open-Meteo API, and both dashboards query ClickHouse.
 Also verified there: 22/22 integration tests, all four DAGs registered with no
 import errors, and the fourteen-task `soil_sensor_daily` DAG green through
 `DockerOperator`.
+
+Phase 5 specifically, measured on the VM:
+
+- Every source table lands in Bronze and Silver across all six domains.
+- **Idempotent.** A re-run with the watermark caught up extracts nothing. A
+  re-run after the source is fully rewritten re-extracts everything, and Silver
+  deduplicates it back to identical row counts — 21,979 rows in, 10,988 out for
+  telemetry. Every ingest partition holds each business key exactly once.
+- **Quarantine works.** Three telemetry rows corrupted in Postgres passed Bronze
+  as-extracted, were rejected at the Silver boundary, and landed in
+  `/lake/quarantine/…/rejected.parquet` beside a `report.parquet` naming both
+  failing checks and a 0.000273 rejection rate. Silver's maximum fuel level came
+  back to 98.69% and the rows never reached the warehouse.
+- **39 external tables** registered in the Hive Metastore, generated from the
+  same pandera contracts the pipelines validate against, and queryable —
+  `SELECT count(*)` through HiveServer2 matches Polars exactly.
 
 That run found **seven bugs that every unit test, strict mypy and six CI jobs
 had passed** — each one an integration-boundary failure:
