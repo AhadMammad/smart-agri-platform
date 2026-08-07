@@ -67,6 +67,8 @@ make init-clickhouse             # ClickHouse tables, views, materialized views
 make seed PROFILE=small          # synthetic farms, fields, sensors, readings
 make run-all                     # Bronze -> Silver -> Gold -> ClickHouse
 make weather                     # Open-Meteo -> lake -> ClickHouse
+make lake                        # the remaining domains into Bronze and Silver
+make analytics                   # the Gold marts and the whole star schema
 make superset-import             # dashboards, charts and datasets from YAML
 ```
 
@@ -109,6 +111,40 @@ The free tier is genuinely rate limited, so the client paces itself, retries
 throttling and transient faults with exponential backoff, and caches responses.
 Nothing is retried that will stay broken: a 400 fails immediately rather than
 burning quota.
+
+## The analytics marts
+
+Every domain lands in the lake, then one Gold mart per dashboard is built and
+the whole star schema is loaded:
+
+```bash
+make lake        # Bronze + Silver for reference, operations, machinery, imagery
+make analytics   # the four marts, then every dimension, fact and aggregate
+```
+
+| Mart | Grain | The question it answers |
+|---|---|---|
+| `agg_field_crop_health_daily` | field × observation | How is the canopy developing, for the crop actually in the ground? |
+| `agg_field_irrigation_daily` | field × day | Did water supplied meet what the crop demanded? |
+| `agg_machine_daily` | machine × day | What did each machine do, burn and cost? |
+| `agg_planting_economics` | planting | What did the cycle return, on what water? |
+
+Each carries its dimension attributes on the row, so a chart is one scan with no
+joins. `clickhouse/ddl/views/` adds the rollups and current-state views — the
+questions that would otherwise be a `GROUP BY` rebuilt slightly differently in
+every chart, which is how two tiles on one dashboard come to disagree.
+
+Two details are load-bearing:
+
+- **Irrigation is built on the weather spine, not on the irrigation events.**
+  Aggregating events alone would produce rows only for days something was
+  applied — and the days that matter most are the dry ones where nothing was.
+- **A mart is cross-domain**, so `analytics_daily` runs after the lake DAGs
+  rather than inside them, and fails with the missing upstream named if the
+  weather Gold for its date has not been built.
+
+`make validate-ddl` applies the whole schema to a throwaway ClickHouse and
+queries every view, catching SQL that no column-level test can.
 
 ## The generated dataset
 
@@ -160,7 +196,7 @@ including the lake and both databases — and asks for confirmation first.
 | [airflow/tests/](airflow/tests/) | DAG integrity tests, run inside the Airflow container |
 | [docker/](docker/) | Compose stack, Hadoop config, and the custom images |
 | [liquibase/](liquibase/) | Versioned Postgres schema changelogs |
-| [clickhouse/ddl/](clickhouse/ddl/) | Dimensions, facts and materialized views |
+| [clickhouse/ddl/](clickhouse/ddl/) | Dimensions, facts, aggregates and views |
 | [superset/assets/](superset/assets/) | Dashboards, charts and datasets as YAML |
 | [scripts/](scripts/) | Host-level helper scripts, including [vm.sh](scripts/vm.sh) |
 | [docs/](docs/) | Architecture notes and decision records |
@@ -220,8 +256,8 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 3 | Full OLTP schema and data generator | **done** | `make seed` — 15 tables, 180,580 rows in 11 s |
 | 4 | Weather ingestion (Open-Meteo) | **done** | 1,825 archive rows; soil moisture rises with rainfall |
 | 5 | Bronze and Silver for all domains | **done** | 21 Bronze + 19 Silver datasets; re-runs deduplicate to identical counts; 39 tables in Hive |
-| 6 | Gold layer and full ClickHouse star schema | **next** | Every dashboard question answered by one query |
-| 7 | Superset dashboards as code | | Four dashboards reproduced from an empty stack |
+| 6 | Gold layer and full ClickHouse star schema | **done** | 27 tables + 15 views; every dashboard question answered by one query |
+| 7 | Superset dashboards as code | **next** | Four dashboards reproduced from an empty stack |
 | 8 | CI, quality gates, documentation | | CI green on a clean checkout; documented path to dashboards |
 
 Deferred: Iceberg migration, Spark, and ML (yield forecasting, irrigation-need
@@ -229,14 +265,14 @@ prediction, anomaly detection).
 
 ### Verification status
 
-Phases 1–5 have been **run on the target VM**, not just built and unit-tested.
+Phases 1–6 have been **run on the target VM**, not just built and unit-tested.
 The full stack — HDFS, Hive Metastore, ClickHouse, Airflow on Celery, Superset —
 comes up, the pipelines move real data end to end, the weather chain calls the
 live Open-Meteo API, and both dashboards query ClickHouse.
 
-Also verified there: 22/22 integration tests, all four DAGs registered with no
-import errors, and the fourteen-task `soil_sensor_daily` DAG green through
-`DockerOperator`.
+Also verified there: 22/22 integration tests, all nine DAGs registered with no
+import errors, and both the fourteen-task `soil_sensor_daily` and the
+twenty-two-task `analytics_daily` DAG green through `DockerOperator`.
 
 Phase 5 specifically, measured on the VM:
 
@@ -254,8 +290,38 @@ Phase 5 specifically, measured on the VM:
   same pandera contracts the pipelines validate against, and queryable —
   `SELECT count(*)` through HiveServer2 matches Polars exactly.
 
-That run found **seven bugs that every unit test, strict mypy and six CI jobs
-had passed** — each one an integration-boundary failure:
+Phase 6, measured on the VM:
+
+- **27 tables and 15 views** in ClickHouse: 9 dimensions, 9 facts, 7 aggregates,
+  and the views completing each dashboard. `analytics_daily` runs 22 tasks
+  through `DockerOperator`, green.
+- **Every dashboard question is one query.** The marts carry their dimension
+  attributes, so none of the four dashboards needs a join:
+  - Canopy follows the cycle — mean NDVI 0.344 bare, 0.571 developing, 0.742
+    peak, 0.427 senescing.
+  - Irrigation dependence tracks climate — 92.3% of water supplied in the Nile
+    Delta is irrigation, against 4.6% in the Ashanti Belt.
+  - Soil moisture responds to supply — 23.79% on deficit days, 30.37% on
+    surplus days, with dry-stressed days falling from 902 to 28.
+  - The wetter half of plantings yields 10.04 t/ha against 3.02 for the drier
+    half.
+- **Idempotent.** A second full `make analytics` reproduced every count and
+  every total exactly — 1,274 crop-health rows, 7,560 irrigation, 4,392
+  machine-days, 37 plantings, $2,319,894 of cost.
+- 22/22 integration tests and 10/10 DAG integrity tests.
+
+That run found **three bugs that 598 unit tests, strict mypy and the DDL
+contract test had all passed** — every one of them in SQL:
+
+| Bug | Why nothing caught it |
+|---|---|
+| Four views rejected outright: `sum(x) AS x` then `sum(x)` again nests an aggregate | The column-list test compares names, and no test executed the SQL |
+| `v_machine_attention` was always empty while 20 faults stood open | It keyed on the fault landing on the machine's *last active* day |
+| An edited view definition silently never applied | `CREATE VIEW IF NOT EXISTS` is a no-op once the view exists |
+
+`make validate-ddl` now applies the whole schema to a throwaway ClickHouse and
+queries every view, which is what would have caught the first and third on the
+laptop. The earlier phases' bug table:
 
 | Bug | Why nothing caught it |
 |---|---|
