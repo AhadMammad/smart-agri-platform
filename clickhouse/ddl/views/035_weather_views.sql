@@ -10,7 +10,7 @@
 -- rainfall figure would be comparing a measurement with a prediction, and the
 -- relationship it appears to show would be partly an artefact of the model that
 -- produced the forecast.
-CREATE VIEW IF NOT EXISTS v_field_water_daily AS
+CREATE OR REPLACE VIEW v_field_water_daily AS
 SELECT
     w.weather_date                AS observation_date,
     w.field_id,
@@ -45,7 +45,7 @@ WHERE w.is_actual;
 
 -- Monthly water summary per field: what fell, what evaporated, and how the soil
 -- responded. Backs the irrigation & water dashboard's headline tiles.
-CREATE VIEW IF NOT EXISTS v_field_water_monthly AS
+CREATE OR REPLACE VIEW v_field_water_monthly AS
 SELECT
     toStartOfMonth(observation_date) AS month_start,
     field_id,
@@ -66,7 +66,7 @@ GROUP BY month_start, field_id, field_code, farm_code, region;
 
 
 -- Latest weather per farm, for status tiles alongside the soil view.
-CREATE VIEW IF NOT EXISTS v_farm_latest_weather AS
+CREATE OR REPLACE VIEW v_farm_latest_weather AS
 SELECT
     f.farm_id,
     f.farm_code,

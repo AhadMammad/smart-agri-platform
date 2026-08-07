@@ -8,7 +8,7 @@
 -- --- Field & crop health -----------------------------------------------------
 
 -- Latest canopy state per field, for the status tiles.
-CREATE VIEW IF NOT EXISTS v_field_latest_crop_health AS
+CREATE OR REPLACE VIEW v_field_latest_crop_health AS
 SELECT
     h.field_id,
     h.field_code,
@@ -39,7 +39,7 @@ ON h.field_id = latest.field_id AND h.observed_on = latest.observed_on;
 
 -- The canopy curve per planting: NDVI against cycle progress, which is the
 -- shape the agronomy model is asserted to produce.
-CREATE VIEW IF NOT EXISTS v_planting_ndvi_curve AS
+CREATE OR REPLACE VIEW v_planting_ndvi_curve AS
 SELECT
     planting_id,
     crop_code,
@@ -67,7 +67,7 @@ WHERE planting_id IS NOT NULL;
 -- Restricted to actuals, for the same reason `v_field_water_daily` is: a
 -- forecast rainfall figure compared against a measured moisture reading shows a
 -- relationship partly produced by the forecast model.
-CREATE VIEW IF NOT EXISTS v_field_water_supply_daily AS
+CREATE OR REPLACE VIEW v_field_water_supply_daily AS
 SELECT
     i.water_date,
     i.field_id,
@@ -105,7 +105,7 @@ WHERE i.is_actual;
 -- them. ClickHouse resolves a bare column name to a SELECT alias where one
 -- exists, so `sum(irrigation_mm)` next to `... AS irrigation_mm` reads as an
 -- aggregate over an aggregate and is rejected outright.
-CREATE VIEW IF NOT EXISTS v_field_irrigation_monthly AS
+CREATE OR REPLACE VIEW v_field_irrigation_monthly AS
 SELECT
     *,
     if(water_supplied_mm > 0, irrigation_mm / water_supplied_mm * 100, NULL)
@@ -137,7 +137,7 @@ FROM
 -- --- Machinery & fleet -------------------------------------------------------
 
 -- Fleet utilisation per machine over its whole series, for the ranking tables.
-CREATE VIEW IF NOT EXISTS v_machine_utilisation AS
+CREATE OR REPLACE VIEW v_machine_utilisation AS
 SELECT
     *,
     if(area_covered_ha > 0, fuel_used_litres / area_covered_ha, NULL) AS fuel_per_ha
@@ -171,38 +171,36 @@ FROM
 );
 
 
--- Machines currently needing attention: the most recent day each reported, kept
--- only where that day was down or carried an open fault.
-CREATE VIEW IF NOT EXISTS v_machine_attention AS
+-- Machines carrying an unresolved fault.
+--
+-- Keyed on the fault still being open, **not** on it having occurred on the
+-- machine's most recent day. Those are different questions, and the second one
+-- is nearly always answered "no": a fault raised in April is still open in
+-- August, but the machine has reported six hundred healthy days since. Filtering
+-- to the latest day emptied this view while twenty faults stood open.
+CREATE OR REPLACE VIEW v_machine_attention AS
 SELECT
-    m.machine_id,
-    m.machine_code,
-    m.machine_type,
-    m.farm_code,
-    m.region,
-    m.activity_date AS last_activity_date,
-    m.utilisation_status,
-    m.open_faults,
-    m.critical_faults,
-    m.downtime_hours,
-    m.repair_cost_usd,
-    m.min_fuel_level_pct,
-    m.max_engine_temp_c
+    machine_id,
+    machine_code,
+    machine_type,
+    farm_code,
+    region,
+    sum(m.open_faults)                       AS open_faults,
+    sum(m.critical_faults)                   AS critical_faults,
+    sum(m.downtime_hours)                    AS downtime_hours,
+    sum(m.repair_cost_usd)                   AS repair_cost_usd,
+    maxIf(m.activity_date, m.open_faults > 0) AS last_fault_on,
+    max(m.activity_date)                     AS last_activity_date,
+    argMax(m.utilisation_status, m.activity_date) AS current_status
 FROM agg_machine_daily AS m
-INNER JOIN
-(
-    SELECT machine_id, max(activity_date) AS activity_date
-    FROM agg_machine_daily
-    GROUP BY machine_id
-) AS latest
-ON m.machine_id = latest.machine_id AND m.activity_date = latest.activity_date
-WHERE m.utilisation_status = 'down' OR m.open_faults > 0;
+GROUP BY machine_id, machine_code, machine_type, farm_code, region
+HAVING open_faults > 0;
 
 
 -- --- Yield & economics -------------------------------------------------------
 
 -- Season and crop rollup: the margin and efficiency league table.
-CREATE VIEW IF NOT EXISTS v_crop_season_economics AS
+CREATE OR REPLACE VIEW v_crop_season_economics AS
 SELECT
     *,
     -- Area-weighted, not a mean of means: averaging per-hectare yields across
@@ -242,7 +240,7 @@ FROM
 
 -- Cost structure per planting, long rather than wide, so a stacked chart reads
 -- it without naming eight columns.
-CREATE VIEW IF NOT EXISTS v_planting_cost_breakdown AS
+CREATE OR REPLACE VIEW v_planting_cost_breakdown AS
 SELECT planting_id, field_code, farm_code, region, season, crop_code, area_ha,
        category, amount_usd,
        if(cost_total_usd > 0, amount_usd / cost_total_usd * 100, NULL) AS share_pct
@@ -255,7 +253,7 @@ ARRAY JOIN
 
 
 -- Farm-level scorecard, for the top-line tiles across all four dashboards.
-CREATE VIEW IF NOT EXISTS v_farm_scorecard AS
+CREATE OR REPLACE VIEW v_farm_scorecard AS
 SELECT
     *,
     if(area_ha > 0, gross_margin_usd / area_ha, NULL) AS margin_per_ha_usd

@@ -49,7 +49,7 @@ GROUP BY week_start, field_id, farm_id, region, soil_type;
 -- Readable wrapper over the aggregate states above. Superset points at this,
 -- not at the AggregatingMergeTree table, because -Merge functions in a chart
 -- definition are an easy thing to get subtly wrong.
-CREATE VIEW IF NOT EXISTS v_field_soil_weekly AS
+CREATE OR REPLACE VIEW v_field_soil_weekly AS
 SELECT
     week_start,
     field_id,
@@ -68,7 +68,7 @@ GROUP BY week_start, field_id, farm_id, region, soil_type;
 
 -- Current condition per field: the most recent day for which each field has
 -- data. Backs the dashboard's status tiles.
-CREATE VIEW IF NOT EXISTS v_field_latest_condition AS
+CREATE OR REPLACE VIEW v_field_latest_condition AS
 SELECT
     d.field_id,
     d.field_code,
