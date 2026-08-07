@@ -41,6 +41,13 @@ DDL_ROOT = Path(__file__).resolve().parents[3] / "clickhouse" / "ddl"
 #: declaring them.
 _VIRTUAL_COLUMNS = {"count"}
 
+#: Labels that repeat across parents, so they identify nothing on their own.
+#: Field names are generated per farm — "Upper Block 1" exists on both EG-001 and
+#: MA-001 — so filtering or grouping on one silently merges two fields on two
+#: continents and shows their average. They are display columns; the `_code`
+#: variants are the identifiers.
+_NON_UNIQUE_LABELS = {"field_name", "farm_name"}
+
 
 def _load(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text())
@@ -249,6 +256,39 @@ class TestDashboardsReferenceRealCharts:
                         f"{path.name}: filter {filter_config['name']!r} targets "
                         f"{column!r}, absent from {dataset['table_name']}"
                     )
+
+
+class TestNothingIsKeyedOnAnAmbiguousLabel:
+    """Filtering or grouping on a name that repeats across farms merges rows
+    that belong to different places, and reports the average as if it were one
+    field. It produces a plausible number, which is why it survived a phase."""
+
+    def test_no_filter_targets_a_non_unique_label(
+        self, dashboards: dict[Path, dict[str, Any]]
+    ) -> None:
+        for path, doc in dashboards.items():
+            for filter_config in doc["metadata"].get("native_filter_configuration", []):
+                for target in filter_config.get("targets", []):
+                    column = target.get("column", {}).get("name")
+                    assert column not in _NON_UNIQUE_LABELS, (
+                        f"{path.name}: filter {filter_config['name']!r} targets "
+                        f"{column!r}, which repeats across farms — use the code"
+                    )
+
+    def test_no_chart_aggregates_on_a_non_unique_label(
+        self, charts: dict[Path, dict[str, Any]]
+    ) -> None:
+        """Naming one in `all_columns` is fine: a table row shows the label
+        beside its farm. Grouping by one is not."""
+        for path, doc in charts.items():
+            params = doc["params"]
+            grouped = set(params.get("groupby") or [])
+            if isinstance(params.get("x_axis"), str):
+                grouped.add(params["x_axis"])
+            offending = grouped & _NON_UNIQUE_LABELS
+            assert (
+                not offending
+            ), f"{path.name} groups by {sorted(offending)}, which repeats across farms"
 
 
 class TestChartsReferenceRealColumnsAndMetrics:

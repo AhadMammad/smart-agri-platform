@@ -239,6 +239,9 @@ metadata:
         rootPath:
           - ROOT_ID
         excluded: []
+    # Targets `field_code`, not `field_name`. Field names repeat across farms —
+    # "Upper Block 1" exists on both EG-001 and MA-001 — so a name filter
+    # silently selects two fields on two continents and shows their average.
     - id: NATIVE_FILTER-field
       name: Field
       filterType: filter_select
@@ -250,7 +253,7 @@ metadata:
       targets:
         - datasetUuid: 5da48fcf-262a-535f-9c69-cf82dcc22632
           column:
-            name: field_name
+            name: field_code
       defaultDataMask:
         filterState: {}
         extraFormData: {}
