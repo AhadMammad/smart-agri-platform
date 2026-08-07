@@ -196,16 +196,45 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 
 ## Roadmap
 
-| Phase | Scope | Status |
-|---|---|---|
-| 1 | Repo foundation and infrastructure | **done** |
-| 2 | Thin end-to-end slice: soil sensor readings | **done** |
-| 3 | Full OLTP schema and data generator | **done** |
-| 4 | Weather ingestion (Open-Meteo) | **done** |
-| 5 | Bronze and Silver for all domains | next |
-| 6 | Gold layer and full ClickHouse star schema | |
-| 7 | Superset dashboards as code | |
-| 8 | CI, quality gates, documentation | |
+| Phase | Scope | Status | Exit criterion, as measured on the VM |
+|---|---|---|---|
+| 1 | Repo foundation and infrastructure | **done** | `make doctor` — 4/4 services healthy |
+| 2 | Thin end-to-end slice: soil sensor readings | **done** | 166,896 readings → ClickHouse in 7 s, 0 quarantined |
+| 3 | Full OLTP schema and data generator | **done** | `make seed` — 15 tables, 180,580 rows in 11 s |
+| 4 | Weather ingestion (Open-Meteo) | **done** | 1,825 archive rows; soil moisture rises with rainfall |
+| 5 | Bronze and Silver for all domains | **next** | Every source table in Bronze and Silver; re-runs idempotent |
+| 6 | Gold layer and full ClickHouse star schema | | Every dashboard question answered by one query |
+| 7 | Superset dashboards as code | | Four dashboards reproduced from an empty stack |
+| 8 | CI, quality gates, documentation | | CI green on a clean checkout; documented path to dashboards |
 
 Deferred: Iceberg migration, Spark, and ML (yield forecasting, irrigation-need
 prediction, anomaly detection).
+
+### Verification status
+
+Phases 1–4 have been **run on the target VM**, not just built and unit-tested.
+The full stack — HDFS, Hive Metastore, ClickHouse, Airflow on Celery, Superset —
+comes up, the pipelines move real data end to end, the weather chain calls the
+live Open-Meteo API, and both dashboards query ClickHouse.
+
+Also verified there: 22/22 integration tests, all four DAGs registered with no
+import errors, and the fourteen-task `soil_sensor_daily` DAG green through
+`DockerOperator`.
+
+That run found **seven bugs that every unit test, strict mypy and six CI jobs
+had passed** — each one an integration-boundary failure:
+
+| Bug | Why nothing caught it |
+|---|---|
+| NameNode never formatted | The sentinel checked for a directory the volume mount creates |
+| ClickHouse bound to `127.0.0.1` | Its healthcheck ran inside the container and passed |
+| Hive Metastore had no JDBC driver | The image ships none, and `IS_RESUME` skipped schema init |
+| Seeder wrote non-existent columns | The test fake accepted any column |
+| One machine working two fields at once | Only a unique constraint could reject it |
+| Every Postgres extract failed | ADBC returns `NUMERIC` as an Arrow type Polars refuses |
+| Airflow had "no username" | Overriding the entrypoint skipped its `/etc/passwd` fixup |
+
+Where a unit test could reasonably have caught one, it now does — the seeder's
+column guard parses the Liquibase changelogs and would have flagged the fourth.
+The rest are why the plan treats a real run as each phase's exit criterion
+rather than a formality.
