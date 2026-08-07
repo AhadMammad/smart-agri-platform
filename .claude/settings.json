@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make check)",
+      "Bash(make lint)",
+      "Bash(make typecheck)",
+      "Bash(make test)",
+      "Bash(make fmt)",
+      "Bash(make ps)",
+      "Bash(make urls)",
+      "Bash(make doctor)",
+      "Bash(make pipelines)",
+      "Bash(make preflight)",
+      "Bash(make hive-tables)",
+      "Bash(make migrate-status)",
+      "Bash(make validate-compose)",
+      "Bash(make test-dags)",
+      "Bash(make hdfs-ls:*)",
+      "Bash(uv --directory etl run ruff:*)",
+      "Bash(uv --directory etl run mypy:*)",
+      "Bash(uv --directory etl run pytest:*)",
+      "Bash(uv --directory etl run python:*)",
+      "Bash(uv --directory etl sync:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker image ls:*)",
+      "Bash(docker compose config:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(bash scripts/vm.sh:*)",
+      "Bash(scripts/vm.sh:*)",
+      "Bash(shellcheck:*)"
+    ],
+    "deny": [
+      "Bash(make clean)",
+      "Bash(make logs:*)",
+      "Bash(make psql)",
+      "Bash(make ch)",
+      "Bash(docker volume rm:*)",
+      "Bash(docker volume prune:*)",
+      "Bash(docker system prune:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./.env.vm)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-format.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

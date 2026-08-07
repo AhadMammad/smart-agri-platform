@@ -162,7 +162,7 @@ including the lake and both databases — and asks for confirmation first.
 | [liquibase/](liquibase/) | Versioned Postgres schema changelogs |
 | [clickhouse/ddl/](clickhouse/ddl/) | Dimensions, facts and materialized views |
 | [superset/assets/](superset/assets/) | Dashboards, charts and datasets as YAML |
-| [scripts/](scripts/) | Host-level helper scripts |
+| [scripts/](scripts/) | Host-level helper scripts, including [vm.sh](scripts/vm.sh) |
 | [docs/](docs/) | Architecture notes and decision records |
 
 ## Development
@@ -178,6 +178,23 @@ make test-integration  # integration tests against the live stack
 Integration tests run **inside** a container on the platform network, not on the
 host: a WebHDFS write is redirected to `datanode:9864`, a hostname that only
 resolves there.
+
+[docs/adding-a-dataset.md](docs/adding-a-dataset.md) is the end-to-end checklist
+for taking a new source table from Postgres to the warehouse — most of it is
+declaration rather than code.
+
+### The verification VM
+
+The stack is verified on an x86_64 Ubuntu VM, never on a laptop — the Hadoop
+images are amd64-only. [scripts/vm.sh](scripts/vm.sh) is the one entry point:
+
+```bash
+cp .env.vm.example .env.vm   # fill in host, user and key; gitignored
+scripts/vm.sh status         # what is running
+scripts/vm.sh make doctor    # pull, rebuild the ETL image, run a target
+scripts/vm.sh ch 'SELECT count(*) FROM agg_field_soil_daily'
+scripts/vm.sh logs namenode 60
+```
 
 ## Key decisions
 

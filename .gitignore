@@ -22,6 +22,13 @@ htmlcov/
 .env
 .env.local
 *.local.env
+# Verification VM connection details. This repo is public; .env.vm.example is
+# the committed template.
+.env.vm
+
+# ---- Claude Code ----
+# Machine-local permissions and overrides. .claude/settings.json is committed.
+.claude/settings.local.json
 
 # ---- Docker / runtime volumes ----
 # Container state must never be committed. `make clean` recreates it.
