@@ -324,3 +324,13 @@ validate-compose: ## Verify the Compose file parses and resolves every variable
 .PHONY: validate-ddl
 validate-ddl: ## Apply the ClickHouse DDL to a throwaway server and query every view
 	@bash $(ROOT)/scripts/validate_ddl.sh
+
+.PHONY: verify-dashboards
+verify-dashboards: ## Run every Superset chart and report whether it returns data
+	@CID=$$($(COMPOSE) --profile bi ps -q superset); \
+	[ -n "$$CID" ] || { echo "superset is not running — try 'make up-bi'" >&2; exit 1; }; \
+	docker cp $(ROOT)/scripts/verify_dashboards.py "$$CID:/tmp/verify_dashboards.py" >/dev/null; \
+	docker exec \
+	  -e SUPERSET_ADMIN_USER="$(call envval,SUPERSET_ADMIN_USER,admin)" \
+	  -e SUPERSET_ADMIN_PASSWORD="$(call envval,SUPERSET_ADMIN_PASSWORD,admin)" \
+	  "$$CID" python /tmp/verify_dashboards.py
