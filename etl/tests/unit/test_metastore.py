@@ -189,3 +189,33 @@ def test_script_statements_are_terminated(settings: HdfsSettings) -> None:
 
     assert script.endswith(";\n")
     assert script.count(";") == len(table_specs()) * 2 + 1
+
+
+def test_catalog_covers_every_bronze_and_silver_pipeline() -> None:
+    """The catalog must not drift from the pipelines that write the lake.
+
+    The weather Bronze datasets have no extraction spec — they are pipeline
+    classes — so they are declared by hand in `metastore`. This is the guard
+    that catches the next dataset added the same way.
+    """
+    from smart_agri.pipelines import pipeline_names
+
+    registered = {table.name for table in table_specs()}
+    written = {
+        name.replace(".", "_", 1)
+        for name in pipeline_names()
+        if name.startswith(("bronze.", "silver."))
+    }
+
+    assert written - registered == set(), "pipelines writing datasets Hive does not know about"
+
+
+def test_weather_datasets_are_registered() -> None:
+    """Weather has no extraction spec, so it is the easiest thing to leave out."""
+    names = {table.name for table in table_specs()}
+
+    assert {
+        "bronze_weather_archive",
+        "bronze_weather_forecast",
+        "silver_fact_weather_daily",
+    } <= names

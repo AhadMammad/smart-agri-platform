@@ -113,9 +113,42 @@ def hive_type(dtype: object) -> str:
     return _FALLBACK_HIVE_TYPE
 
 
+def _weather_tables() -> tuple[TableSpec, ...]:
+    """The weather datasets, which come from the API rather than Postgres.
+
+    They are declared here rather than derived because they have no extraction
+    spec — the weather pipelines are hand-written classes, since fetching from
+    an HTTP API and reconciling archive against forecast is not something a spec
+    describes. `test_metastore` asserts this list stays in step with the
+    pipeline registry.
+    """
+    from smart_agri.contracts import BRONZE_WEATHER, SILVER_FACT_WEATHER_DAILY
+    from smart_agri.pipelines.bronze import SNAPSHOT_PARTITION_KEY as SILVER_WEATHER_KEY
+    from smart_agri.pipelines.weather import INGEST_PARTITION_KEY as BRONZE_WEATHER_KEY
+
+    bronze = tuple(
+        TableSpec(
+            name=f"bronze_{dataset}",
+            zone=LakeZone.BRONZE,
+            dataset=dataset,
+            partition_key=BRONZE_WEATHER_KEY,
+            schema=BRONZE_WEATHER,
+        )
+        for dataset in ("weather_archive", "weather_forecast")
+    )
+    silver = TableSpec(
+        name="silver_fact_weather_daily",
+        zone=LakeZone.SILVER,
+        dataset="fact_weather_daily",
+        partition_key=SILVER_WEATHER_KEY,
+        schema=SILVER_FACT_WEATHER_DAILY,
+    )
+    return (*bronze, silver)
+
+
 def table_specs() -> tuple[TableSpec, ...]:
     """Every Bronze and Silver dataset, as a table to register."""
-    tables: list[TableSpec] = []
+    tables: list[TableSpec] = list(_weather_tables())
 
     for snapshot in SNAPSHOT_SPECS:
         tables.append(
