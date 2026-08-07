@@ -1,0 +1,350 @@
+# Water supplied against water demanded, per field per day.
+#
+# Built on the weather spine, so a day with no irrigation still has a row. That
+# is what lets a chart show the dry days nothing was applied on — the days an
+# irrigation dashboard exists for.
+table_name: agg_field_irrigation_daily
+main_dttm_col: water_date
+description: Irrigation, rainfall and evaporative demand per field per day
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 2c81ea07-0254-5593-9fe5-70dfa63036d6
+metrics:
+  - metric_name: count
+    verbose_name: Field-days
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: irrigation_mm_total
+    verbose_name: Irrigation (mm)
+    metric_type: sum
+    expression: SUM(irrigation_mm)
+    description: Depth applied, directly comparable with rainfall
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: rainfall_mm_total
+    verbose_name: Rainfall (mm)
+    metric_type: sum
+    expression: SUM(rainfall_mm)
+    description: null
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: et0_mm_total
+    verbose_name: Evapotranspiration (mm)
+    metric_type: sum
+    expression: SUM(et0_mm)
+    description: What the crop demanded
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: water_volume_total
+    verbose_name: Water applied (m³)
+    metric_type: sum
+    expression: SUM(water_volume_m3)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: energy_kwh_total
+    verbose_name: Pumping energy (kWh)
+    metric_type: sum
+    expression: SUM(energy_kwh)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: deficit_days
+    verbose_name: Deficit days
+    metric_type: sum
+    expression: "SUM(CASE WHEN supply_status = 'deficit' THEN 1 ELSE 0 END)"
+    description: Field-days where demand exceeded everything received
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: irrigation_share
+    verbose_name: Irrigation share (%)
+    metric_type: avg
+    expression: SUM(irrigation_mm) / NULLIF(SUM(irrigation_mm) + SUM(rainfall_mm), 0) * 100
+    description: How much of the water received was paid for rather than fallen
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: water_date
+    verbose_name: Date
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: country_code
+    verbose_name: Country
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_code
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_code
+    verbose_name: Field
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: soil_type
+    verbose_name: Soil type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: supply_status
+    verbose_name: Supply status
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: deficit / balanced / surplus, from demand less what was received
+    python_date_format: null
+    extra: null
+  - column_name: irrigation_method
+    verbose_name: Method
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: "'none' on a day nothing was applied; 'mixed' where two methods ran"
+    python_date_format: null
+    extra: null
+  - column_name: is_actual
+    verbose_name: Measured weather
+    is_dttm: false
+    is_active: true
+    type: BOOLEAN
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: False where the weather is still forecast rather than observed
+    python_date_format: null
+    extra: null
+  - column_name: irrigation_mm
+    verbose_name: Irrigation (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rainfall_mm
+    verbose_name: Rainfall (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: et0_mm
+    verbose_name: ET₀ (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: water_supplied_mm
+    verbose_name: Water supplied (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: water_deficit_mm
+    verbose_name: Water deficit (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: Positive means demand exceeded supply
+    python_date_format: null
+    extra: null
+  - column_name: irrigation_share_pct
+    verbose_name: Irrigation share (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: irrigation_events
+    verbose_name: Events
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: water_volume_m3
+    verbose_name: Water applied (m³)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: energy_kwh
+    verbose_name: Pumping energy (kWh)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_area_ha
+    verbose_name: Field area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

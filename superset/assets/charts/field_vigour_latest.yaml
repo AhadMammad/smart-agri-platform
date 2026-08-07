@@ -1,0 +1,32 @@
+# Per-field canopy state, weakest first
+slice_name: Field canopy detail
+description: Canopy state per field for the selected period, weakest relative to its crop first
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1__table
+  granularity_sqla: observed_on
+  time_range: No filter
+  row_limit: 200
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - field_name
+  - farm_code
+  - region
+  - crop_name
+  - season
+  - days_after_sowing
+  - cycle_progress_pct
+  - avg_ndvi
+  - ndvi_vs_expected_pct
+  - canopy_stage
+  - vigour_flag
+  order_by_cols:
+  - '["ndvi_vs_expected_pct", true]'
+query_context: null
+cache_timeout: null
+uuid: 390c0b57-8c98-50fc-8649-f2df5bc5d6a9
+version: 1.0.0
+dataset_uuid: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1

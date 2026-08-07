@@ -1,0 +1,35 @@
+# How many observations sit at each point of the crop cycle, and how vigorous they are
+slice_name: Canopy stage and vigour
+description: Observations by canopy stage, split by how the canopy compares with the crop's own peak
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1__table
+  granularity_sqla: observed_on
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_bar
+  x_axis: canopy_stage
+  metrics:
+  - count
+  groupby:
+  - vigour_flag
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: canopy_stage != 'unknown'
+    subject: null
+    operator: null
+    comparator: null
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Canopy stage
+  y_axis_title: Observations
+  show_legend: true
+  x_axis_sort_series: name
+query_context: null
+cache_timeout: null
+uuid: 40c4c2cd-1272-5e86-a833-01d09910488e
+version: 1.0.0
+dataset_uuid: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1

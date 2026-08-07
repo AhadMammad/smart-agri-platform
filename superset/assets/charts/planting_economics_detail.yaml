@@ -1,0 +1,35 @@
+# One row per planting, worst margin first
+slice_name: Planting economics detail
+description: Every crop cycle — area, yield, revenue, cost, margin and the water it took
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 52b676c4-60eb-5807-8c12-da0586460c1a__table
+  granularity_sqla: planted_on
+  time_range: No filter
+  row_limit: 500
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - field_code
+  - farm_code
+  - region
+  - season
+  - crop_name
+  - variety_name
+  - outcome
+  - area_ha
+  - yield_t_ha
+  - revenue_usd
+  - cost_total_usd
+  - margin_per_ha_usd
+  - water_received_mm
+  - water_use_efficiency_t_per_100mm
+  order_by_cols:
+  - '["margin_per_ha_usd", true]'
+query_context: null
+cache_timeout: null
+uuid: 5bfc56e3-e0f8-5598-a3c6-12215a66379e
+version: 1.0.0
+dataset_uuid: 52b676c4-60eb-5807-8c12-da0586460c1a

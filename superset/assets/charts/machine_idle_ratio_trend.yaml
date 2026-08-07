@@ -1,0 +1,28 @@
+# Idle share of running time, by machine type
+slice_name: Idle ratio by machine type
+description: Share of running time spent idle; days the engine never started are excluded, not counted as zero
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  datasource: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5__table
+  granularity_sqla: activity_date
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_line
+  x_axis: activity_date
+  time_grain_sqla: P1M
+  metrics:
+  - avg_idle_ratio
+  groupby:
+  - machine_type
+  y_axis_format: ',.1f'
+  x_axis_title: Month
+  y_axis_title: Idle ratio (%)
+  show_legend: true
+  truncateYAxis: false
+query_context: null
+cache_timeout: null
+uuid: 24c74b55-7b37-5c20-a2d0-b38c390ec53a
+version: 1.0.0
+dataset_uuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5

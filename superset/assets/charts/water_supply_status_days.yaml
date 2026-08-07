@@ -1,0 +1,35 @@
+# Field-days where demand exceeded supply, over time
+slice_name: Water supply status over time
+description: Field-days by supply status — deficit days are the ones irrigation is meant to remove
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 2c81ea07-0254-5593-9fe5-70dfa63036d6__table
+  granularity_sqla: water_date
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_bar
+  x_axis: water_date
+  time_grain_sqla: P1W
+  metrics:
+  - count
+  groupby:
+  - supply_status
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: is_actual
+    subject: null
+    operator: null
+    comparator: null
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Week
+  y_axis_title: Field-days
+  show_legend: true
+query_context: null
+cache_timeout: null
+uuid: 932eff94-6a51-55d1-8251-36c6a7accbeb
+version: 1.0.0
+dataset_uuid: 2c81ea07-0254-5593-9fe5-70dfa63036d6

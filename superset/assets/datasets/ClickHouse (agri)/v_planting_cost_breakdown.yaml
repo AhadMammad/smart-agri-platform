@@ -1,0 +1,176 @@
+# Cost per planting, long rather than wide.
+#
+# `agg_planting_economics` holds one column per cost category, which is the
+# right shape for a table and the wrong one for a stacked bar — a chart would
+# have to name all eight. The view unpivots them with ARRAY JOIN so a category
+# is a value to group by.
+table_name: v_planting_cost_breakdown
+main_dttm_col: null
+description: One row per planting per cost category, with its share of the total
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: e9ee27b8-3d76-54f1-b34e-33a5b9325ffd
+metrics:
+  - metric_name: count
+    verbose_name: Rows
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: amount_total
+    verbose_name: Cost (USD)
+    metric_type: sum
+    expression: SUM(amount_usd)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: cost_per_ha
+    verbose_name: Cost per hectare (USD/ha)
+    metric_type: avg
+    expression: SUM(amount_usd) / NULLIF(SUM(area_ha), 0)
+    description: Ratio of the totals; within one category this is exact, because
+      each planting contributes its area once per category
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: category
+    verbose_name: Cost category
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: seed / fertilizer / crop_protection / irrigation / fuel / labour /
+      machinery / other
+    python_date_format: null
+    extra: null
+  - column_name: season
+    verbose_name: Season
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: crop_code
+    verbose_name: Crop
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_code
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_code
+    verbose_name: Field
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: amount_usd
+    verbose_name: Cost (USD)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: share_pct
+    verbose_name: Share of planting cost (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: area_ha
+    verbose_name: Area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: planting_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

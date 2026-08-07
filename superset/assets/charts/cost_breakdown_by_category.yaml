@@ -1,0 +1,27 @@
+# Where the money went, by crop
+slice_name: Cost structure by crop
+description: Spend by category for each crop, from the unpivoted cost view
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: e9ee27b8-3d76-54f1-b34e-33a5b9325ffd__table
+  time_range: No filter
+  row_limit: 1000
+  viz_type: echarts_timeseries_bar
+  x_axis: crop_code
+  metrics:
+  - amount_total
+  groupby:
+  - category
+  stack: Stack
+  y_axis_format: ',.0f'
+  x_axis_title: Crop
+  y_axis_title: Cost (USD)
+  show_legend: true
+  x_axis_sort_series: name
+query_context: null
+cache_timeout: null
+uuid: a0d8f341-71c9-554a-8ef3-d031392779c9
+version: 1.0.0
+dataset_uuid: e9ee27b8-3d76-54f1-b34e-33a5b9325ffd

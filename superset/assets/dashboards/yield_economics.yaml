@@ -1,0 +1,234 @@
+# Yield & Economics — the Phase 6 planting mart.
+#
+# One row per crop cycle, so the questions here close only when a cycle does.
+# Yield, revenue and margin are null while a planting is still growing; Superset
+# omits nulls from aggregates, so a season in progress reads as unfinished
+# rather than as a crop failure.
+dashboard_title: Yield & Economics
+description: Yield, cost, margin and water-use efficiency per crop cycle
+css: ''
+slug: yield-economics
+uuid: 7f05c561-219c-5119-9d38-e8223f0d8e91
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-header
+      - ROW-margin
+      - ROW-detail
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Yield & Economics
+
+  ROW-header:
+    type: ROW
+    id: ROW-header
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 24
+      code: |-
+        ## Yield & Economics
+
+        One row per planting, from `agg_planting_economics`. Cost is derived from
+        what was actually consumed — inputs, irrigation energy and machine fuel —
+        rather than drawn independently, so margin and yield are related
+        quantities rather than three unconnected series.
+
+        **Water received** is irrigation plus the rain that fell between sowing
+        and harvest, counted over each planting's own window. **Water-use
+        efficiency** is tonnes per hectare per 100 mm of that.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-header
+
+  ROW-margin:
+    type: ROW
+    id: ROW-margin
+    children:
+      - CHART-margin-by-crop
+      - CHART-cost-structure
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-margin-by-crop:
+    type: CHART
+    id: CHART-margin-by-crop
+    children: []
+    meta:
+      width: 7
+      height: 60
+      chartId: null
+      uuid: f7490dc6-0dae-5ecc-8df6-184899f49594
+      sliceName: Margin per hectare by crop
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-margin
+  CHART-cost-structure:
+    type: CHART
+    id: CHART-cost-structure
+    children: []
+    meta:
+      width: 5
+      height: 60
+      chartId: null
+      uuid: a0d8f341-71c9-554a-8ef3-d031392779c9
+      sliceName: Cost structure by crop
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-margin
+
+  ROW-detail:
+    type: ROW
+    id: ROW-detail
+    children:
+      - CHART-yield-vs-water
+      - CHART-planting-detail
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-yield-vs-water:
+    type: CHART
+    id: CHART-yield-vs-water
+    children: []
+    meta:
+      width: 5
+      height: 60
+      chartId: null
+      uuid: 8bb3d194-a62d-563b-a389-0a8740b1ade5
+      sliceName: Yield vs water received
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-detail
+  CHART-planting-detail:
+    type: CHART
+    id: CHART-planting-detail
+    children: []
+    meta:
+      width: 7
+      height: 60
+      chartId: null
+      uuid: 5bfc56e3-e0f8-5598-a3c6-12215a66379e
+      sliceName: Planting economics detail
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-detail
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  native_filter_configuration:
+    - id: NATIVE_FILTER-season
+      name: Season
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 52b676c4-60eb-5807-8c12-da0586460c1a
+          column:
+            name: season
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-crop
+      name: Crop
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 52b676c4-60eb-5807-8c12-da0586460c1a
+          column:
+            name: crop_name
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-region
+      name: Region
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 52b676c4-60eb-5807-8c12-da0586460c1a
+          column:
+            name: region
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-outcome
+      name: Outcome
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 52b676c4-60eb-5807-8c12-da0586460c1a
+          column:
+            name: outcome
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []

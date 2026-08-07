@@ -1,0 +1,230 @@
+# Machinery & Fleet — the Phase 6 machine mart.
+#
+# Reads only `agg_machine_daily` and the `v_machine_utilisation` rollup over it,
+# so every tile agrees on what a working day is. Layout follows the question
+# order: what is the fleet doing, what does it cost to run, and which machine
+# needs attention.
+dashboard_title: Machinery & Fleet
+description: Fleet utilisation, fuel efficiency and faults per machine
+css: ''
+slug: machinery-fleet
+uuid: 80355f9f-35f7-57cb-903a-6e1f1d3aae85
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-header
+      - ROW-utilisation
+      - ROW-ranking
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Machinery & Fleet
+
+  ROW-header:
+    type: ROW
+    id: ROW-header
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 24
+      code: |-
+        ## Machinery & Fleet
+
+        Daily fleet activity from `agg_machine_daily`. Telemetry is the spine, so
+        a machine that never started still has a row and parked time is visible.
+
+        **Utilisation** is *working* when the engine ran and covered ground,
+        *idle* when it ran without doing so, *parked* when it never ran, and
+        *down* whenever a critical fault was open — which outranks all three,
+        because a broken machine that happened to idle is still broken.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-header
+
+  ROW-utilisation:
+    type: ROW
+    id: ROW-utilisation
+    children:
+      - CHART-fleet-trend
+      - CHART-fuel-per-ha
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-fleet-trend:
+    type: CHART
+    id: CHART-fleet-trend
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: 26900b68-021d-55a0-a873-c8a27fdd874f
+      sliceName: Fleet utilisation over time
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-utilisation
+  CHART-fuel-per-ha:
+    type: CHART
+    id: CHART-fuel-per-ha
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 72a501e2-a367-5aa1-9637-fad270cc6b8d
+      sliceName: Fuel per hectare by machine type
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-utilisation
+
+  ROW-ranking:
+    type: ROW
+    id: ROW-ranking
+    children:
+      - CHART-machine-ranking
+      - CHART-idle-ratio
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-machine-ranking:
+    type: CHART
+    id: CHART-machine-ranking
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: 55492464-4df3-5be2-b97b-f667d95b9c95
+      sliceName: Machine ranking
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-ranking
+  CHART-idle-ratio:
+    type: CHART
+    id: CHART-idle-ratio
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 24c74b55-7b37-5c20-a2d0-b38c390ec53a
+      sliceName: Idle ratio by machine type
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-ranking
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  # Machine type and farm are how a fleet manager narrows first; the ranking
+  # table sits on a different dataset, so the filters that apply to it are
+  # scoped separately below.
+  native_filter_configuration:
+    - id: NATIVE_FILTER-machine-type
+      name: Machine type
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5
+          column:
+            name: machine_type
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-farm
+      name: Farm
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5
+          column:
+            name: farm_code
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-utilisation
+      name: Utilisation
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5
+          column:
+            name: utilisation_status
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-date
+      name: Date range
+      filterType: filter_time
+      controlValues: {}
+      targets:
+        - datasetUuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []

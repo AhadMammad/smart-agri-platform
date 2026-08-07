@@ -1,0 +1,36 @@
+# The canopy curve: NDVI over time, one series per crop
+slice_name: NDVI trend by crop
+description: Mean vegetation index over time, one series per crop
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_line
+params:
+  datasource: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1__table
+  granularity_sqla: observed_on
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_line
+  x_axis: observed_on
+  time_grain_sqla: P1W
+  metrics:
+  - avg_ndvi_metric
+  groupby:
+  - crop_name
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: crop_name IS NOT NULL
+    subject: null
+    operator: null
+    comparator: null
+  comparison_type: values
+  y_axis_format: ',.2f'
+  x_axis_title: Date
+  y_axis_title: NDVI
+  show_legend: true
+  truncateYAxis: false
+query_context: null
+cache_timeout: null
+uuid: b22e1d2f-5d76-5996-8558-d31a6da689d2
+version: 1.0.0
+dataset_uuid: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1

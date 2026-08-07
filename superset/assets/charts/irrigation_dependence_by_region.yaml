@@ -1,0 +1,37 @@
+# What share of each region's water is paid for rather than fallen
+slice_name: Irrigation dependence by region
+description: Share of water received that was irrigated — high means the region cannot rely on rain
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 2c81ea07-0254-5593-9fe5-70dfa63036d6__table
+  granularity_sqla: water_date
+  time_range: No filter
+  row_limit: 100
+  viz_type: table
+  query_mode: aggregate
+  groupby:
+  - region
+  - country_code
+  metrics:
+  - irrigation_share
+  - irrigation_mm_total
+  - rainfall_mm_total
+  - et0_mm_total
+  - deficit_days
+  - energy_kwh_total
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: is_actual
+    subject: null
+    operator: null
+    comparator: null
+  order_desc: true
+  timeseries_limit_metric: irrigation_share
+query_context: null
+cache_timeout: null
+uuid: 6d97aa72-b7ae-5ee0-9dcc-15f3c23f0c1a
+version: 1.0.0
+dataset_uuid: 2c81ea07-0254-5593-9fe5-70dfa63036d6

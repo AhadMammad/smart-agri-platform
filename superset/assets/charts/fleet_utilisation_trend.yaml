@@ -1,0 +1,28 @@
+# What the fleet was doing, week by week
+slice_name: Fleet utilisation over time
+description: Machine-days by status — working, idle, parked or down
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5__table
+  granularity_sqla: activity_date
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_bar
+  x_axis: activity_date
+  time_grain_sqla: P1W
+  metrics:
+  - count
+  groupby:
+  - utilisation_status
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Week
+  y_axis_title: Machine-days
+  show_legend: true
+query_context: null
+cache_timeout: null
+uuid: 26900b68-021d-55a0-a873-c8a27fdd874f
+version: 1.0.0
+dataset_uuid: 7e62538c-19aa-585d-8812-ecb2e9f9cbb5

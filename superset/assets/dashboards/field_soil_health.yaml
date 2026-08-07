@@ -25,6 +25,8 @@ position:
       - ROW-header
       - ROW-trend
       - ROW-detail
+      - ROW-canopy
+      - ROW-canopy-detail
     parents:
       - ROOT_ID
   HEADER_ID:
@@ -140,6 +142,73 @@ position:
       - ROOT_ID
       - GRID_ID
       - ROW-detail
+
+  # Phase 6 added the canopy side of "crop health". Soil above, canopy below:
+  # the same field, measured from the ground and from orbit.
+  ROW-canopy:
+    type: ROW
+    id: ROW-canopy
+    children:
+      - CHART-ndvi-trend
+      - CHART-canopy-stage
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-ndvi-trend:
+    type: CHART
+    id: CHART-ndvi-trend
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: b22e1d2f-5d76-5996-8558-d31a6da689d2
+      sliceName: NDVI trend by crop
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-canopy
+  CHART-canopy-stage:
+    type: CHART
+    id: CHART-canopy-stage
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 40c4c2cd-1272-5e86-a833-01d09910488e
+      sliceName: Canopy stage and vigour
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-canopy
+
+  ROW-canopy-detail:
+    type: ROW
+    id: ROW-canopy-detail
+    children:
+      - CHART-field-vigour
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-field-vigour:
+    type: CHART
+    id: CHART-field-vigour
+    children: []
+    meta:
+      width: 12
+      height: 60
+      chartId: null
+      uuid: 390c0b57-8c98-50fc-8649-f2df5bc5d6a9
+      sliceName: Field canopy detail
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-canopy-detail
 
 metadata:
   color_scheme: supersetColors

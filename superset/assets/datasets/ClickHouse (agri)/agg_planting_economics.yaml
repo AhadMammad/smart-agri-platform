@@ -1,0 +1,465 @@
+# One row per crop cycle: what it cost, what it returned, and on what water.
+#
+# Yield, revenue and margin are nullable while a planting is still in the
+# ground. Superset omits nulls from aggregates, so a season in progress reads as
+# "not yet harvested" rather than as a crop failure.
+table_name: agg_planting_economics
+main_dttm_col: planted_on
+description: Cost, revenue, yield and water received for every planting
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 52b676c4-60eb-5807-8c12-da0586460c1a
+metrics:
+  - metric_name: count
+    verbose_name: Plantings
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: area_total
+    verbose_name: Area (ha)
+    metric_type: sum
+    expression: SUM(area_ha)
+    description: null
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: yield_total
+    verbose_name: Yield (t)
+    metric_type: sum
+    expression: SUM(yield_tonnes)
+    description: null
+    d3format: ',.1f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: yield_per_ha
+    verbose_name: Yield (t/ha)
+    metric_type: avg
+    expression: SUM(yield_tonnes) / NULLIF(SUM(CASE WHEN yield_t_ha IS NULL THEN 0 ELSE area_ha END), 0)
+    description: Area-weighted, and only over area that actually produced a yield —
+      a mean of per-hectare figures would over-weight the small fields
+    d3format: ',.2f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: revenue_total
+    verbose_name: Revenue (USD)
+    metric_type: sum
+    expression: SUM(revenue_usd)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: cost_total
+    verbose_name: Cost (USD)
+    metric_type: sum
+    expression: SUM(cost_total_usd)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: gross_margin_total
+    verbose_name: Gross margin (USD)
+    metric_type: sum
+    expression: SUM(gross_margin_usd)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: margin_per_ha
+    verbose_name: Margin per hectare (USD/ha)
+    metric_type: avg
+    expression: SUM(gross_margin_usd) / NULLIF(SUM(area_ha), 0)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: water_received_avg
+    verbose_name: Water received (mm)
+    metric_type: avg
+    expression: AVG(water_received_mm)
+    description: Irrigation plus rainfall over the planting's own window
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: water_use_efficiency
+    verbose_name: Water-use efficiency (t/ha per 100 mm)
+    metric_type: avg
+    expression: AVG(water_use_efficiency_t_per_100mm)
+    description: null
+    d3format: ',.2f'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: planted_on
+    verbose_name: Sown on
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: harvested_on
+    verbose_name: Harvested on
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: Null while the crop is still in the ground
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: country_code
+    verbose_name: Country
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_code
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_code
+    verbose_name: Field
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: soil_type
+    verbose_name: Soil type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: season
+    verbose_name: Season
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: crop_name
+    verbose_name: Crop
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: crop_category
+    verbose_name: Crop category
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: variety_name
+    verbose_name: Variety
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: outcome
+    verbose_name: Outcome
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: harvested / growing / failed / terminated
+    python_date_format: null
+    extra: null
+  - column_name: quality_grade
+    verbose_name: Grade
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: area_ha
+    verbose_name: Area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: yield_tonnes
+    verbose_name: Yield (t)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: yield_t_ha
+    verbose_name: Yield (t/ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: revenue_usd
+    verbose_name: Revenue (USD)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: cost_total_usd
+    verbose_name: Cost (USD)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: cost_per_ha_usd
+    verbose_name: Cost per hectare (USD/ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: gross_margin_usd
+    verbose_name: Gross margin (USD)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: margin_per_ha_usd
+    verbose_name: Margin per hectare (USD/ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: irrigation_mm
+    verbose_name: Irrigation (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rainfall_mm
+    verbose_name: Rainfall (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: water_received_mm
+    verbose_name: Water received (mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: water_use_efficiency_t_per_100mm
+    verbose_name: Water-use efficiency (t/ha per 100 mm)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: gdd_accumulated
+    verbose_name: Degree-days accumulated
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: planting_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

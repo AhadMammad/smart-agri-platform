@@ -1,0 +1,34 @@
+# Yield against water received, one point per planting
+slice_name: Yield vs water received
+description: One point per harvested planting — the relationship the agronomy model is built to produce
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_scatter
+params:
+  datasource: 52b676c4-60eb-5807-8c12-da0586460c1a__table
+  granularity_sqla: planted_on
+  time_range: No filter
+  row_limit: 5000
+  viz_type: echarts_timeseries_scatter
+  x_axis: water_received_mm
+  metrics:
+  - yield_per_ha
+  groupby:
+  - crop_name
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: yield_t_ha IS NOT NULL AND water_received_mm IS NOT NULL
+    subject: null
+    operator: null
+    comparator: null
+  y_axis_format: ',.1f'
+  x_axis_title: Water received (mm)
+  y_axis_title: Yield (t/ha)
+  show_legend: true
+  truncateYAxis: false
+query_context: null
+cache_timeout: null
+uuid: 8bb3d194-a62d-563b-a389-0a8740b1ade5
+version: 1.0.0
+dataset_uuid: 52b676c4-60eb-5807-8c12-da0586460c1a

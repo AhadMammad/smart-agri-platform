@@ -26,6 +26,8 @@ position:
       - ROW-intro
       - ROW-rain
       - ROW-balance
+      - ROW-supply
+      - ROW-dependence
     parents:
       - ROOT_ID
   HEADER_ID:
@@ -130,6 +132,73 @@ position:
       - ROOT_ID
       - GRID_ID
       - ROW-balance
+
+  # Phase 6 added the supply side. The rows above show what the weather did;
+  # these show what was done about it.
+  ROW-supply:
+    type: ROW
+    id: ROW-supply
+    children:
+      - CHART-supply-status
+      - CHART-irrigation-vs-rainfall
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-supply-status:
+    type: CHART
+    id: CHART-supply-status
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: 932eff94-6a51-55d1-8251-36c6a7accbeb
+      sliceName: Water supply status over time
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-supply
+  CHART-irrigation-vs-rainfall:
+    type: CHART
+    id: CHART-irrigation-vs-rainfall
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 68160f80-7152-5d24-944d-4a3aa0676479
+      sliceName: Irrigation vs rainfall by region
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-supply
+
+  ROW-dependence:
+    type: ROW
+    id: ROW-dependence
+    children:
+      - CHART-irrigation-dependence
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-irrigation-dependence:
+    type: CHART
+    id: CHART-irrigation-dependence
+    children: []
+    meta:
+      width: 12
+      height: 50
+      chartId: null
+      uuid: 6d97aa72-b7ae-5ee0-9dcc-15f3c23f0c1a
+      sliceName: Irrigation dependence by region
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-dependence
 
 metadata:
   color_scheme: supersetColors

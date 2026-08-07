@@ -1,0 +1,347 @@
+# Canopy development per field, with the crop actually in the ground.
+#
+# Physical table: the Gold mart has already joined the planting, variety and
+# crop onto every row, so an NDVI reading arrives with the stage to judge it
+# against and no chart needs a join.
+table_name: agg_field_crop_health_daily
+main_dttm_col: observed_on
+description: Vegetation indices per field, in the context of the crop growing on it
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 58716fc6-8f8d-5a01-bf11-1f456ce2e6d1
+metrics:
+  - metric_name: count
+    verbose_name: Observations
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: avg_ndvi_metric
+    verbose_name: Avg NDVI
+    metric_type: avg
+    expression: AVG(avg_ndvi)
+    description: Mean vegetation index across the selected fields
+    d3format: ',.3f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: ndvi_vs_expected
+    verbose_name: NDVI vs crop peak (%)
+    metric_type: avg
+    expression: AVG(ndvi_vs_expected_pct)
+    description: Canopy as a percentage of what this crop reaches at full cover
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: field_observations
+    verbose_name: Fields observed
+    metric_type: count_distinct
+    expression: COUNT(DISTINCT field_id)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: low_vigour_observations
+    verbose_name: Low-vigour observations
+    metric_type: sum
+    expression: "SUM(CASE WHEN vigour_flag = 'low' THEN 1 ELSE 0 END)"
+    description: Observations where the canopy is well below the crop's own peak
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: observed_on
+    verbose_name: Observed on
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: country_code
+    verbose_name: Country
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_code
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_name
+    verbose_name: Field
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_code
+    verbose_name: Field code
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: soil_type
+    verbose_name: Soil type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: crop_name
+    verbose_name: Crop
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: Null between crop cycles — bare ground is a real state
+    python_date_format: null
+    extra: null
+  - column_name: crop_category
+    verbose_name: Crop category
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: season
+    verbose_name: Season
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: canopy_stage
+    verbose_name: Canopy stage
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: bare / developing / peak / senescing / unknown, from cycle progress
+    python_date_format: null
+    extra: null
+  - column_name: vigour_flag
+    verbose_name: Vigour
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: low / normal / high, against the crop's own peak NDVI
+    python_date_format: null
+    extra: null
+  - column_name: avg_ndvi
+    verbose_name: NDVI
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: max_ndvi
+    verbose_name: Max NDVI
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: avg_ndwi
+    verbose_name: NDWI
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: peak_ndvi_expected
+    verbose_name: Crop peak NDVI
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: ndvi_vs_expected_pct
+    verbose_name: NDVI vs peak (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: cycle_progress_pct
+    verbose_name: Cycle progress (%)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: days_after_sowing
+    verbose_name: Days after sowing
+    is_dttm: false
+    is_active: true
+    type: INT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: observation_count
+    verbose_name: Passes
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_area_ha
+    verbose_name: Field area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: field_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

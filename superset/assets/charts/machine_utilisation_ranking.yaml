@@ -1,0 +1,34 @@
+# One row per machine, least productive first
+slice_name: Machine ranking
+description: Every machine over its whole series — days by status, fuel efficiency, faults and repair cost
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: f144312e-02c6-5fbe-b1a0-04566936d62f__table
+  time_range: No filter
+  row_limit: 100
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - machine_code
+  - machine_type
+  - farm_code
+  - working_days
+  - idle_days
+  - parked_days
+  - down_days
+  - operation_hours
+  - area_covered_ha
+  - fuel_per_ha
+  - avg_idle_ratio_pct
+  - critical_faults
+  - downtime_hours
+  - repair_cost_usd
+  order_by_cols:
+  - '["fuel_per_ha", false]'
+query_context: null
+cache_timeout: null
+uuid: 55492464-4df3-5be2-b97b-f667d95b9c95
+version: 1.0.0
+dataset_uuid: f144312e-02c6-5fbe-b1a0-04566936d62f

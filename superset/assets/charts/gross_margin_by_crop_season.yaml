@@ -1,0 +1,34 @@
+# Margin per hectare, by crop and season
+slice_name: Margin per hectare by crop
+description: Gross margin per hectare, by crop and season — negative bars are cycles that cost more than they returned
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 52b676c4-60eb-5807-8c12-da0586460c1a__table
+  granularity_sqla: planted_on
+  time_range: No filter
+  row_limit: 500
+  viz_type: echarts_timeseries_bar
+  x_axis: crop_name
+  metrics:
+  - margin_per_ha
+  groupby:
+  - season
+  adhoc_filters:
+  - clause: WHERE
+    expressionType: SQL
+    sqlExpression: outcome = 'harvested'
+    subject: null
+    operator: null
+    comparator: null
+  y_axis_format: ',.0f'
+  x_axis_title: Crop
+  y_axis_title: Margin (USD/ha)
+  show_legend: true
+  truncateYAxis: false
+query_context: null
+cache_timeout: null
+uuid: f7490dc6-0dae-5ecc-8df6-184899f49594
+version: 1.0.0
+dataset_uuid: 52b676c4-60eb-5807-8c12-da0586460c1a
