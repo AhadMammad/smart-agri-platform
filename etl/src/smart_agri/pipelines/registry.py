@@ -1,8 +1,11 @@
 """The pipeline registry.
 
 Every pipeline is reachable by name, so the CLI is a single `run <name>` command
-and a DAG is a list of names rather than a set of imports. Phase 5 adds domains
-by registering more specs here.
+and a DAG is a list of names rather than a set of imports.
+
+Bronze and Silver are built from the specs in `bronze.py` and `silver_specs.py`
+rather than registered one by one: adding a source table is a declaration, and
+the registry picks it up automatically.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from smart_agri.pipelines.base import BasePipeline, PipelineContext
 from smart_agri.pipelines.bronze import (
+    INCREMENTAL_SPECS,
     SNAPSHOT_SPECS,
     BronzeIncrementalPipeline,
     BronzeSnapshotPipeline,
@@ -23,12 +27,8 @@ from smart_agri.pipelines.load import (
     LoadFactSensorReadingPipeline,
     LoadGoldFieldSoilDailyPipeline,
 )
-from smart_agri.pipelines.silver import (
-    SilverDimFarmPipeline,
-    SilverDimFieldPipeline,
-    SilverDimSensorPipeline,
-    SilverFactSensorReadingPipeline,
-)
+from smart_agri.pipelines.silver_spec import SilverPipeline
+from smart_agri.pipelines.silver_specs import SILVER_SPECS
 from smart_agri.pipelines.weather import (
     BronzeWeatherArchivePipeline,
     BronzeWeatherForecastPipeline,
@@ -46,44 +46,34 @@ if TYPE_CHECKING:
 PipelineFactory = Callable[[PipelineContext], BasePipeline]
 
 
-def _snapshot_factory(spec_index: int) -> PipelineFactory:
-    """Bind a spec by index so the closure captures a value, not the loop var."""
+def _bind(builder: Callable[..., BasePipeline], spec: object) -> PipelineFactory:
+    """Bind a spec to its pipeline class.
 
-    def build(context: PipelineContext) -> BasePipeline:
-        return BronzeSnapshotPipeline(SNAPSHOT_SPECS[spec_index], context)
+    A closure over the loop variable would capture the last spec for every
+    entry, so the spec is bound as a default argument instead.
+    """
 
-    return build
-
-
-def _dim_load_factory(spec_index: int) -> PipelineFactory:
-    def build(context: PipelineContext) -> BasePipeline:
-        return LoadDimensionPipeline(DIM_LOAD_SPECS[spec_index], context)
+    def build(context: PipelineContext, _spec: object = spec) -> BasePipeline:
+        return builder(_spec, context)
 
     return build
 
 
 _REGISTRY: dict[str, PipelineFactory] = {
-    # Bronze
+    # --- Bronze: one entry per declared source ---
+    **{f"bronze.{spec.dataset}": _bind(BronzeSnapshotPipeline, spec) for spec in SNAPSHOT_SPECS},
     **{
-        f"bronze.{spec.dataset}": _snapshot_factory(index)
-        for index, spec in enumerate(SNAPSHOT_SPECS)
+        f"bronze.{spec.dataset}": _bind(BronzeIncrementalPipeline, spec)
+        for spec in INCREMENTAL_SPECS
     },
-    "bronze.sensor_reading": BronzeIncrementalPipeline,
-    # Silver
-    "silver.dim_farm": SilverDimFarmPipeline,
-    "silver.dim_field": SilverDimFieldPipeline,
-    "silver.dim_sensor": SilverDimSensorPipeline,
-    "silver.fact_sensor_reading": SilverFactSensorReadingPipeline,
-    # Gold
+    # --- Silver: one entry per declared spec ---
+    **{f"silver.{spec.dataset}": _bind(SilverPipeline, spec) for spec in SILVER_SPECS},
+    # --- Gold and load (Phase 2 slice) ---
     "gold.field_soil_daily": GoldFieldSoilDailyPipeline,
-    # Load
-    **{
-        f"load.{spec.dataset}": _dim_load_factory(index)
-        for index, spec in enumerate(DIM_LOAD_SPECS)
-    },
+    **{f"load.{spec.dataset}": _bind(LoadDimensionPipeline, spec) for spec in DIM_LOAD_SPECS},
     "load.fact_sensor_reading": LoadFactSensorReadingPipeline,
     "load.field_soil_daily": LoadGoldFieldSoilDailyPipeline,
-    # --- weather (Phase 4) ---
+    # --- Weather (Phase 4) ---
     "bronze.weather_archive": BronzeWeatherArchivePipeline,
     "bronze.weather_forecast": BronzeWeatherForecastPipeline,
     "silver.fact_weather_daily": SilverFactWeatherDailyPipeline,
@@ -128,9 +118,81 @@ WEATHER_STAGES: tuple[tuple[str, ...], ...] = (
 )
 
 
+#: Phase 5 domains. Each is a Bronze stage then a Silver stage; every one
+#: re-extracts the dimensions its joins need rather than assuming another DAG
+#: ran first, so a domain can be scheduled, retried or backfilled on its own.
+REFERENCE_STAGES: tuple[tuple[str, ...], ...] = (
+    ("bronze.region", "bronze.soil_type", "bronze.crop", "bronze.crop_variety"),
+    (
+        "silver.dim_region",
+        "silver.dim_soil_type",
+        "silver.dim_crop",
+        "silver.dim_crop_variety",
+    ),
+)
+
+OPERATIONS_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "bronze.farm",
+        "bronze.field",
+        "bronze.planting",
+        "bronze.irrigation_event",
+        "bronze.input_application",
+        "bronze.harvest",
+        "bronze.field_cost",
+    ),
+    (
+        "silver.dim_farm",
+        "silver.dim_field",
+        "silver.dim_planting",
+        "silver.fact_irrigation",
+        "silver.fact_input_application",
+        "silver.fact_harvest",
+        "silver.fact_field_cost",
+    ),
+)
+
+MACHINERY_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "bronze.farm",
+        "bronze.field",
+        "bronze.machine",
+        "bronze.machine_operation",
+        "bronze.machine_telemetry",
+        "bronze.machine_fault",
+    ),
+    (
+        "silver.dim_machine",
+        "silver.fact_machine_operation",
+        "silver.fact_machine_telemetry",
+        "silver.fact_machine_fault",
+    ),
+)
+
+IMAGERY_STAGES: tuple[tuple[str, ...], ...] = (
+    ("bronze.farm", "bronze.field", "bronze.field_index_observation"),
+    ("silver.dim_field", "silver.fact_field_index"),
+)
+
+#: Every domain, by name — used by the DAG factory and `smart-agri run-domain`.
+DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "soil_sensor": SOIL_SENSOR_STAGES,
+    "weather": WEATHER_STAGES,
+    "reference": REFERENCE_STAGES,
+    "operations": OPERATIONS_STAGES,
+    "machinery": MACHINERY_STAGES,
+    "imagery": IMAGERY_STAGES,
+}
+
+
 def pipeline_names() -> Sequence[str]:
     """Every registered pipeline name, sorted."""
     return sorted(_REGISTRY)
+
+
+def domain_names() -> Sequence[str]:
+    """Every domain name, sorted."""
+    return sorted(DOMAIN_STAGES)
 
 
 def get_pipeline(name: str, context: PipelineContext | None = None) -> BasePipeline:
@@ -148,3 +210,13 @@ def get_pipeline(name: str, context: PipelineContext | None = None) -> BasePipel
         raise KeyError(msg) from None
 
     return factory(context or PipelineContext())
+
+
+def get_stages(domain: str) -> tuple[tuple[str, ...], ...]:
+    """Stage list for a domain, failing with the valid names listed."""
+    try:
+        return DOMAIN_STAGES[domain]
+    except KeyError:
+        valid = ", ".join(domain_names())
+        msg = f"unknown domain {domain!r}; valid domains: {valid}"
+        raise KeyError(msg) from None

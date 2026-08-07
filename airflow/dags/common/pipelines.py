@@ -58,6 +58,77 @@ WEATHER_STAGE_LABELS: tuple[str, ...] = (
 )
 
 
+#: Phase 5 domains. Each extracts its own dimensions rather than assuming
+#: another DAG ran first, so a domain can be scheduled, retried or backfilled
+#: independently. Kept in step with `smart_agri.pipelines.DOMAIN_STAGES` by
+#: tests/unit/test_dag_pipeline_sync.py.
+REFERENCE_STAGES: tuple[tuple[str, ...], ...] = (
+    ("bronze.region", "bronze.soil_type", "bronze.crop", "bronze.crop_variety"),
+    (
+        "silver.dim_region",
+        "silver.dim_soil_type",
+        "silver.dim_crop",
+        "silver.dim_crop_variety",
+    ),
+)
+
+OPERATIONS_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "bronze.farm",
+        "bronze.field",
+        "bronze.planting",
+        "bronze.irrigation_event",
+        "bronze.input_application",
+        "bronze.harvest",
+        "bronze.field_cost",
+    ),
+    (
+        "silver.dim_farm",
+        "silver.dim_field",
+        "silver.dim_planting",
+        "silver.fact_irrigation",
+        "silver.fact_input_application",
+        "silver.fact_harvest",
+        "silver.fact_field_cost",
+    ),
+)
+
+MACHINERY_STAGES: tuple[tuple[str, ...], ...] = (
+    (
+        "bronze.farm",
+        "bronze.field",
+        "bronze.machine",
+        "bronze.machine_operation",
+        "bronze.machine_telemetry",
+        "bronze.machine_fault",
+    ),
+    (
+        "silver.dim_machine",
+        "silver.fact_machine_operation",
+        "silver.fact_machine_telemetry",
+        "silver.fact_machine_fault",
+    ),
+)
+
+IMAGERY_STAGES: tuple[tuple[str, ...], ...] = (
+    ("bronze.farm", "bronze.field", "bronze.field_index_observation"),
+    ("silver.dim_field", "silver.fact_field_index"),
+)
+
+#: Every domain the platform schedules, by name.
+DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "soil_sensor": SOIL_SENSOR_STAGES,
+    "weather": WEATHER_STAGES,
+    "reference": REFERENCE_STAGES,
+    "operations": OPERATIONS_STAGES,
+    "machinery": MACHINERY_STAGES,
+    "imagery": IMAGERY_STAGES,
+}
+
+#: Bronze and Silver stages share these labels across the Phase 5 domains.
+LAKE_STAGE_LABELS: tuple[str, ...] = ("bronze", "silver")
+
+
 def task_id_for(pipeline: str) -> str:
     """Task id for a pipeline name, within its stage's TaskGroup.
 

@@ -16,8 +16,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 from smart_agri.config import LakeZone, Settings, get_settings
-from smart_agri.contracts import validate
+from smart_agri.contracts import ValidationResult, validate
 from smart_agri.io import ClickHouseSink, ControlStore, HdfsStore, PostgresSource, RunStats
 from smart_agri.io.control import RunStatus
 from smart_agri.utils import get_logger
@@ -26,7 +28,6 @@ if TYPE_CHECKING:
     from datetime import date
 
     import pandera.polars as pa
-    import polars as pl
 
 logger = get_logger(__name__)
 
@@ -175,17 +176,42 @@ class BasePipeline(ABC):
                     f"Failing checks: {result.failure_summary.to_dicts()}"
                 )
                 raise ValueError(msg)
-            self._quarantine(result.invalid, run)
+            self._quarantine(result, run)
 
         return result.valid, result.rows_invalid
 
-    def _quarantine(self, frame: pl.DataFrame, run: RunContext) -> None:
-        """Persist rejected rows so a data problem can be investigated."""
-        path = self.context.hdfs.zone_path(
-            LakeZone.QUARANTINE, self.dataset, f"logical_date={run.partition}", "rejected.parquet"
+    def _quarantine(self, result: ValidationResult, run: RunContext) -> None:
+        """Persist rejected rows and why they were rejected.
+
+        The rows alone are not enough to act on: a thousand quarantined records
+        are a mystery until you know which check failed and how often. The
+        summary lands beside them so the answer is one read away rather than a
+        re-run with a debugger.
+        """
+        directory = self.context.hdfs.zone_path(
+            LakeZone.QUARANTINE, self.dataset, f"logical_date={run.partition}"
         )
-        self.context.hdfs.write_parquet(frame, path)
-        logger.warning("rows_quarantined", pipeline=self.name, rows=frame.height, path=path)
+        self.context.hdfs.remove(directory)
+        self.context.hdfs.write_parquet(result.invalid, f"{directory}/rejected.parquet")
+
+        report = result.failure_summary.with_columns(
+            pl.lit(self.name).alias("pipeline"),
+            pl.lit(run.partition).alias("logical_date"),
+            pl.lit(result.rows_in).alias("rows_in"),
+            pl.lit(result.rows_invalid).alias("rows_rejected"),
+            pl.lit(round(result.rejection_rate, 6)).alias("rejection_rate"),
+        )
+        self.context.hdfs.write_parquet(report, f"{directory}/report.parquet")
+
+        logger.warning(
+            "rows_quarantined",
+            pipeline=self.name,
+            rows=result.rows_invalid,
+            rows_in=result.rows_in,
+            rejection_rate=round(result.rejection_rate, 4),
+            checks=result.failure_summary.select("check").to_series().to_list(),
+            path=directory,
+        )
 
     def _partition_path(self, zone: LakeZone, key: str, run: RunContext) -> str:
         """Directory for this run's partition of the dataset."""

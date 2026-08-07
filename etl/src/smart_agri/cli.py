@@ -156,6 +156,51 @@ def run_all(logical_date: _DateOption = None) -> None:
     typer.echo("\nsoil-sensor slice complete.")
 
 
+@app.command(name="run-domain")
+def run_domain(
+    domain: Annotated[str, typer.Argument(help="Domain name, e.g. operations.")],
+    logical_date: _DateOption = None,
+) -> None:
+    """Run every pipeline in a domain, in dependency order.
+
+    Convenience for a local run and for backfills. Airflow runs the same
+    pipelines as separate tasks so a failure is isolated to one stage.
+    """
+    from smart_agri.pipelines import PipelineContext, get_pipeline, get_stages
+
+    target = _resolve_date(logical_date)
+
+    try:
+        stages = get_stages(domain)
+    except KeyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from None
+
+    context = PipelineContext()
+    for index, stage in enumerate(stages, start=1):
+        typer.echo(f"--- stage {index} ---")
+        for name in stage:
+            stats = get_pipeline(name, context).run(target)
+            typer.echo(
+                f"  {name}: read={stats.rows_read} written={stats.rows_written} "
+                f"quarantined={stats.rows_quarantined}"
+            )
+
+    typer.echo(f"\n{domain} complete.")
+
+
+@app.command(name="list-domains")
+def list_domains() -> None:
+    """List the domains and what each one runs."""
+    from smart_agri.pipelines import DOMAIN_STAGES
+
+    for domain, stages in DOMAIN_STAGES.items():
+        tasks = sum(len(stage) for stage in stages)
+        typer.echo(f"{domain}  ({tasks} pipelines in {len(stages)} stages)")
+        for index, stage in enumerate(stages, start=1):
+            typer.echo(f"  stage {index}: {', '.join(stage)}")
+
+
 @app.command()
 def weather(logical_date: _DateOption = None) -> None:
     """Refresh weather for every farm and reload ClickHouse.
