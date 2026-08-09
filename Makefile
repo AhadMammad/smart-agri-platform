@@ -325,6 +325,10 @@ validate-compose: ## Verify the Compose file parses and resolves every variable
 validate-ddl: ## Apply the ClickHouse DDL to a throwaway server and query every view
 	@bash $(ROOT)/scripts/validate_ddl.sh
 
+.PHONY: check-docs
+check-docs: ## Verify every documented `make` target and relative link still resolves
+	@python3 $(ROOT)/scripts/check_docs.py
+
 .PHONY: verify-dashboards
 verify-dashboards: ## Run every Superset chart and report whether it returns data
 	@CID=$$($(COMPOSE) --profile bi ps -q superset); \

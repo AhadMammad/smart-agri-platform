@@ -26,9 +26,17 @@ first, plain `uv run` works — but `make` will not.
 | `make test` | `pytest -m "not integration" --cov` | part of `quality` |
 | `make fmt` | `ruff format .` then `ruff check --fix .` — **mutates files** | — |
 | `make validate-compose` | `docker compose config -q` across all three profiles | `compose` |
+| `make validate-ddl` | applies the ClickHouse DDL to a throwaway server, queries every view | `ddl` |
+| `make check-docs` | every documented `make` target and relative link resolves | `docs` |
 | `make test-dags` | DAG integrity tests inside the scheduler container | `dags` |
 | `make test-integration` | integration suite on the platform network | not in CI |
+| `make verify-dashboards` | runs every Superset chart, reports its row count | not in CI |
 | `shellcheck scripts/*.sh docker/superset/bootstrap.sh` | shell lint | `shell` |
+
+Python under `scripts/` is linted with the same ruff config as `etl/`, but is
+outside that project, so `make check` does not reach it — CI checks it
+separately. Run it by hand with
+`uv --directory etl run ruff check --config pyproject.toml ../scripts`.
 
 One test:
 

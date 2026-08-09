@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UV_VERSION: "0.5.11"
+  UV_VERSION: "0.10.11"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -22,10 +22,10 @@ jobs:
       run:
         working-directory: etl
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v9
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
@@ -43,10 +43,19 @@ jobs:
       - name: Mypy
         run: uv run mypy
 
+      # The host-level Python under scripts/ lives outside the etl project, so
+      # `ruff check .` above never sees it. Checked here against the same config
+      # rather than left as the one unlinted corner of the repo.
+      - name: Ruff (host scripts)
+        run: uv run ruff check --config pyproject.toml --output-format=github ../scripts
+
+      - name: Ruff format (host scripts)
+        run: uv run ruff format --config pyproject.toml --check ../scripts
+
       - name: Unit tests with coverage gate
         run: uv run pytest -m "not integration" --cov --cov-report=xml --cov-report=term
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -57,7 +66,7 @@ jobs:
     name: Shell scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: ShellCheck
         run: shellcheck scripts/*.sh docker/superset/bootstrap.sh
 
@@ -66,7 +75,7 @@ jobs:
     name: Compose config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate .env
         run: make env
@@ -75,11 +84,39 @@ jobs:
         run: make validate-compose
 
   # ---------------------------------------------------------------------------
+  # The DDL is hand-written because it carries engines, partition keys and sort
+  # orders that no contract describes. `test_clickhouse_ddl.py` compares its
+  # column lists with the pandera schemas, but only a server can say whether the
+  # SQL is *valid* — four views were once rejected outright for nesting an
+  # aggregate inside a SELECT alias, which no amount of parsing would catch.
+  ddl:
+    name: ClickHouse DDL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Apply the schema to a throwaway server and query every view
+        run: make validate-ddl
+
+  # ---------------------------------------------------------------------------
+  # Phase 8's exit criterion is a *documented* path to dashboards. Documentation
+  # rots silently: a renamed make target or a moved file breaks the instructions
+  # only for whoever follows them first.
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Every documented target and link resolves
+        run: make check-docs
+
+  # ---------------------------------------------------------------------------
   assets:
     name: Superset and Liquibase assets
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Superset YAML parses, and chart params are mappings
         run: |
@@ -134,12 +171,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build runtime image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/etl/Dockerfile
@@ -168,7 +205,7 @@ jobs:
     name: DAG integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the Airflow image
         run: docker build -t smart-agri-airflow:ci docker/airflow

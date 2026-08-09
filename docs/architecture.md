@@ -210,6 +210,84 @@ will stay wrong, and retrying only consumes the quota the limiter exists to
 protect. Open-Meteo also reports some failures in the body with an HTTP 200, so
 the body is checked as well as the status.
 
+### A mart is cross-domain, so it runs last
+
+The Phase 5 domains each stand alone: `operations` re-extracts the dimensions its
+joins need rather than assuming `reference` ran, so any domain can be scheduled,
+retried or backfilled on its own.
+
+That property cannot survive contact with the Gold marts.
+`field_irrigation_daily` needs weather *and* operations; `planting_economics`
+needs operations, weather and imagery. A domain DAG that built either would have
+to re-run half the platform, or read whatever another DAG happened to leave in
+the lake — which is the same thing as having no dependency at all, except that
+it fails silently.
+
+So the marts and the entire warehouse load live in one `analytics` domain that
+runs after the others. The coupling is real, and putting it in one place makes
+it visible instead of implicit.
+
+Where a mart needs an upstream Gold partition, it fails with the missing
+pipeline named rather than degrading. A water balance without rainfall is not a
+partial answer; it is a wrong one.
+
+### The irrigation mart is built on the weather spine
+
+`field_irrigation_daily` starts from `field_weather_daily` and left-joins the
+irrigation events, rather than aggregating the events and joining weather on.
+
+Aggregating events first produces rows only for days something was applied. But
+the days an irrigation dashboard exists to surface are the dry ones where
+*nothing* was — and those rows would simply not exist, so the deficit would
+appear as missing data rather than as a deficit.
+
+### Classification lives in Polars, never in SQL
+
+Every threshold the dashboards filter on — canopy stage, vigour, supply status,
+machine utilisation — is a module constant in `pipelines/gold_marts.py` with a
+test pinning it, not a `CASE WHEN` in a view.
+
+The reason is the same one Phase 2 gave for `agg_field_soil_daily`, and Phase 6
+supplied the evidence: four ClickHouse views were rejected outright on first
+deploy for nesting an aggregate inside a `SELECT` alias, and a fifth returned
+nothing for a year because it keyed on the wrong day. None of that was reachable
+by a unit test. What SQL *does* keep is the shape of a rollup, where being wrong
+is visible; what it must not keep is a rule that decides whether a field is
+stressed.
+
+### The warehouse DDL is hand-written, and therefore guarded twice
+
+`metastore.py` generates Hive DDL from the pandera contracts, so the lake's
+external tables cannot drift. ClickHouse does not get the same treatment: its
+DDL carries engines, partition keys, sort orders and `LowCardinality`
+annotations that no contract describes, and generating it would mean encoding
+all of that in Python to avoid writing it in SQL.
+
+The duplication is accepted and then checked from both sides:
+
+- `test_clickhouse_ddl.py` parses the SQL and compares every table's columns
+  with the contract it is loaded from.
+- `make validate-ddl` applies the whole schema to a throwaway server and queries
+  every view, because a column list can be correct while the SQL is invalid.
+
+### Dashboards are exported, reviewed and committed — not edited in place
+
+Superset assets are YAML in `superset/assets/`, imported by `make
+superset-import`. Edits happen in the UI, then `make superset-export` pulls them
+back and the diff is reviewed like any other change.
+
+A dashboard is a web of UUID references that Superset resolves only at import,
+where a broken one is either a silent no-op or a traceback inside the importer.
+So the graph is walked statically instead: `test_superset_assets.py` checks that
+every placed chart exists, every column and metric a chart names is declared on
+its dataset, and every dataset column and metric expression resolves against the
+ClickHouse DDL. `make verify-dashboards` then runs each chart through Superset's
+own query pipeline, which is the only way to learn that a chart imports cleanly
+and renders nothing.
+
+That pair found a filter keyed on `field_name` — a label that repeats across
+farms, so it had been quietly averaging two fields on two continents.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:

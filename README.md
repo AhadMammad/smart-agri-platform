@@ -56,6 +56,8 @@ make urls            # print the web UIs
 ```
 
 `make` on its own lists every target.
+[docs/runbook.md](docs/runbook.md) is the whole path from a clone to four
+working dashboards, with what each step should print.
 
 ## The soil-sensor slice
 
@@ -233,7 +235,7 @@ including the lake and both databases — and asks for confirmation first.
 | [clickhouse/ddl/](clickhouse/ddl/) | Dimensions, facts, aggregates and views |
 | [superset/assets/](superset/assets/) | Dashboards, charts and datasets as YAML |
 | [scripts/](scripts/) | Host-level helper scripts, including [vm.sh](scripts/vm.sh) |
-| [docs/](docs/) | Architecture notes and decision records |
+| [docs/](docs/) | [Runbook](docs/runbook.md), [architecture notes](docs/architecture.md), [how to add a dataset](docs/adding-a-dataset.md) |
 
 ## Development
 
