@@ -294,14 +294,14 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 5 | Bronze and Silver for all domains | **done** | 21 Bronze + 19 Silver datasets; re-runs deduplicate to identical counts; 39 tables in Hive |
 | 6 | Gold layer and full ClickHouse star schema | **done** | 27 tables + 15 views; every dashboard question answered by one query |
 | 7 | Superset dashboards as code | **done** | Four dashboards reproduced from an empty stack |
-| 8 | CI, quality gates, documentation | **next** | CI green on a clean checkout; documented path to dashboards |
+| 8 | CI, quality gates, documentation | **done** | 8 CI jobs green from a cold clone; [runbook](docs/runbook.md) from clone to dashboards |
 
 Deferred: Iceberg migration, Spark, and ML (yield forecasting, irrigation-need
 prediction, anomaly detection).
 
 ### Verification status
 
-Phases 1–7 have been **run on the target VM**, not just built and unit-tested.
+Phases 1–8 have been **run on the target VM**, not just built and unit-tested.
 The full stack — HDFS, Hive Metastore, ClickHouse, Airflow on Celery, Superset —
 comes up, the pipelines move real data end to end, the weather chain calls the
 live Open-Meteo API, and all four dashboards query ClickHouse.
@@ -345,6 +345,24 @@ Phase 6, measured on the VM:
   every total exactly — 1,274 crop-health rows, 7,560 irrigation, 4,392
   machine-days, 37 plantings, $2,319,894 of cost.
 - 22/22 integration tests and 10/10 DAG integrity tests.
+
+Phase 8, measured on a **cold clone** rather than on the VM, because that is
+what its criterion is about:
+
+- `git clone` into an empty directory, then `make install && make check &&
+  make validate-ddl && make check-docs && make validate-compose` — all green,
+  619 tests, 91.92% coverage, no local state involved.
+- **8 CI jobs green**, including two new gates: `ClickHouse DDL` runs
+  `make validate-ddl` against a throwaway server, and `Documentation` runs
+  `make check-docs`.
+- `scripts/*.py` is now linted. It was the one unchecked corner of the repo —
+  `ruff check .` runs inside `etl/` and never saw it.
+- Every action is off Node 20. `astral-sh/setup-uv` publishes a `v9.0.0`
+  release but no floating `v9` tag, so it is pinned to `v7`; CI found that, not
+  review.
+- [docs/runbook.md](docs/runbook.md) is the documented path: clone to four
+  dashboards, with the output each step should print and what it means when it
+  does not.
 
 Phase 7, measured on the VM — and measured from **nothing**, because the stack
 was wiped between Phase 6 and this run:
