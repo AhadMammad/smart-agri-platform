@@ -270,6 +270,10 @@ ch: ## Open a clickhouse-client shell on the analytics database
 	  --password $$(grep -E '^CLICKHOUSE_PASSWORD=' $(ENV_FILE) | cut -d= -f2) \
 	  --database $$(grep -E '^CLICKHOUSE_DB=' $(ENV_FILE) | cut -d= -f2)
 
+.PHONY: vm-tunnel
+vm-tunnel: ## SSH-forward a VM service to localhost; SERVICE=hive|postgres|clickhouse|superset (default hive). Foreground — Ctrl-C to close
+	@scripts/vm.sh tunnel $(or $(SERVICE),hive)
+
 .PHONY: urls
 urls: ## Print the web UIs exposed by the stack
 	@echo "Airflow    http://localhost:$$(grep -E '^AIRFLOW_HOST_PORT='  $(ENV_FILE) | cut -d= -f2)"

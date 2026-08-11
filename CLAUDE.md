@@ -55,6 +55,7 @@ They block forever in a non-interactive session, or destroy data:
   and ClickHouse volumes.
 - `make logs` — `docker compose logs -f`, follow mode, never exits.
 - `make psql`, `make ch` — interactive shells waiting on stdin.
+- `make vm-tunnel` / `scripts/vm.sh tunnel` — foreground SSH port-forward, never exits until Ctrl-C. For the user to run in their own terminal, not from a Claude Code session.
 
 Use instead:
 

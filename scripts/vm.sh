@@ -28,6 +28,8 @@ usage: scripts/vm.sh <command> [args]
   logs <service> [n]  last n lines (default 40) of a container's logs
   ch '<sql>'          run a query against the ClickHouse analytics database
   psql '<sql>'        run a query against the Postgres source database
+  tunnel [service]    SSH-forward a VM service to localhost (hive|postgres|clickhouse|superset; default hive)
+                       foreground — Ctrl-C to close
 
 Connection details are read from .env.vm — see .env.vm.example.
 USAGE
@@ -126,6 +128,29 @@ cmd_psql() {
             -qAt -c \"$1\""
 }
 
+# Forwards a single VM-local port to the same port on 127.0.0.1 here, over
+# SSH. Bound to loopback only, so nothing on the LAN can ride the tunnel.
+# Runs in the foreground (-N: no remote command) so an accidental orphaned
+# background ssh process can't outlive the terminal it was started from —
+# Ctrl-C is the only way to close it, which is deliberate.
+cmd_tunnel() {
+  local service="${1:-hive}" port
+  case "$service" in
+    hive)       port=10000 ;;
+    postgres)   port=5432  ;;
+    clickhouse) port=8123  ;;
+    superset)   port=8088  ;;
+    *) die "unknown tunnel service: $service (expected hive|postgres|clickhouse|superset)" ;;
+  esac
+  echo "tunnelling 127.0.0.1:${port} -> ${VM_HOST}:${port} (${service} on the VM) — Ctrl-C to close"
+  exec ssh "${SSH_OPTS[@]}" \
+    -N -T \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+    -L "127.0.0.1:${port}:localhost:${port}" \
+    "${VM_USER}@${VM_HOST}"
+}
+
 # --- dispatch ----------------------------------------------------------------
 
 [ $# -ge 1 ] || { usage; exit 2; }
@@ -134,7 +159,7 @@ COMMAND="$1"; shift
 
 case "$COMMAND" in
   -h|--help|help) usage; exit 0 ;;
-  status|sync|exec|make|logs|ch|psql)
+  status|sync|exec|make|logs|ch|psql|tunnel)
     load_connection
     "cmd_$COMMAND" "$@"
     ;;

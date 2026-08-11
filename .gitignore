@@ -48,6 +48,12 @@ liquibase/*.log
 data/out/
 *.parquet
 
+# ---- Onboarding doc (local only) ----
+# A generated reading aid, not part of the committed doc set. `docs/vendor/`
+# holds its vendored Mermaid bundle so it renders with no network access.
+docs/onboarding.html
+docs/vendor/
+
 # ---- Editors / OS ----
 .idea/
 .vscode/
