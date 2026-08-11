@@ -134,14 +134,23 @@ def capture(page: Page, slug: str, destination: Path) -> bool:
         print(f"    warning: {slug} never finished rendering — capturing as-is", file=sys.stderr)
     page.wait_for_timeout(2_000)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    page.screenshot(path=str(destination), full_page=True)
-    blank = is_blank(destination)
-    if blank:
-        print(
-            f"    warning: {slug} looks blank — do not trust it as a baseline",
-            file=sys.stderr,
-        )
-    return blank
+
+    # Tall dashboards intermittently produce an empty full-page capture even
+    # though the DOM is fully populated (text, canvases and all) — so retry,
+    # and take a throwaway viewport shot first each time: forcing a paint of
+    # the visible area is what makes the full-page one come back correct.
+    for attempt in range(1, CAPTURE_ATTEMPTS + 1):
+        page.screenshot()
+        page.screenshot(path=str(destination), full_page=True)
+        if not is_blank(destination):
+            return False
+        if attempt < CAPTURE_ATTEMPTS:
+            print(f"    {slug} came out blank, retrying ({attempt})", file=sys.stderr)
+            page.evaluate(SCROLL_THROUGH)
+            page.wait_for_timeout(3_000)
+
+    print(f"    warning: {slug} looks blank — do not trust it as a baseline", file=sys.stderr)
+    return True
 
 
 def is_blank(image: Path) -> bool:
