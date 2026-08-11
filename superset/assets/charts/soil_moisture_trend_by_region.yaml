@@ -19,7 +19,9 @@ params:
   comparison_type: values
   y_axis_format: ',.1f'
   x_axis_title: Date
+  x_axis_title_margin: 30
   y_axis_title: Soil moisture (%)
+  y_axis_title_margin: 50
   show_legend: true
 query_context: null
 cache_timeout: null

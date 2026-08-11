@@ -19,6 +19,7 @@ params:
   - region
   stack: null
   y_axis_title: Rainfall less ET0 (mm)
+  y_axis_title_margin: 50
   show_legend: true
 query_context: null
 cache_timeout: null

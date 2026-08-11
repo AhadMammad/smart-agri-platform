@@ -17,6 +17,7 @@ params:
   groupby:
   - field_code
   y_axis_title: Growing-degree days (base 10 C)
+  y_axis_title_margin: 50
   show_legend: true
 query_context: null
 cache_timeout: null

@@ -18,6 +18,7 @@ params:
   - moisture_stress
   stack: Stack
   y_axis_title: Field-days
+  y_axis_title_margin: 50
   show_legend: true
 query_context: null
 cache_timeout: null

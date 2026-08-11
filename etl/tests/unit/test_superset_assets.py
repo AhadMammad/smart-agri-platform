@@ -458,9 +458,13 @@ class TestBundleIsImportable:
 #: offers 0, 45 and 90.
 _ROTATED = 45
 
-#: `x_axis_title_margin` defaults to 15, which is sized for horizontal tick
-#: labels. Rotated labels are taller, so the title needs the next stop up.
-_MARGIN_WHEN_ROTATED = 30
+#: Both margins default to 15, which is too tight in practice — screenshots
+#: showed axis titles sitting on top of their own tick labels on every chart
+#: that left them at the default, date axes included. These are the values
+#: that render clear; Superset's control offers 15/30/50/75/100/125/150/200.
+_X_MARGIN_FLAT = 30
+_X_MARGIN_ROTATED = 75
+_Y_MARGIN = 50
 
 #: Superset's ECharts form-data mixes naming conventions — `x_axis_title_margin`
 #: is snake_case while `xAxisLabelRotation` is camelCase — and an unrecognised
@@ -520,22 +524,25 @@ class TestAxisLabelsHaveRoomToRender:
             + "\n".join(sorted(offenders))
         )
 
-    def test_rotated_labels_leave_room_for_the_axis_title(
-        self, charts: dict[Path, dict[str, Any]]
-    ) -> None:
-        """Rotated labels are taller, so the default 15 puts the title on them."""
+    def test_axis_titles_clear_their_tick_labels(self, charts: dict[Path, dict[str, Any]]) -> None:
+        """An axis title left on the default margin lands on its own labels.
+
+        Both margins default to 15. That is too tight for a rotated category
+        label, for a date label, and for any y value wider than a couple of
+        digits — which is to say, for every chart here.
+        """
         offenders = []
         for path, doc in charts.items():
             params = doc["params"]
-            if (params.get("xAxisLabelRotation") or 0) < _ROTATED:
-                continue
-            if not params.get("x_axis_title"):
-                continue
-            if (params.get("x_axis_title_margin") or 15) < _MARGIN_WHEN_ROTATED:
-                offenders.append(path.name)
-        assert not offenders, (
-            f"rotated x labels need x_axis_title_margin >= {_MARGIN_WHEN_ROTATED}:\n"
-            + "\n".join(sorted(offenders))
+            if params.get("x_axis_title"):
+                rotated = (params.get("xAxisLabelRotation") or 0) >= _ROTATED
+                needed = _X_MARGIN_ROTATED if rotated else _X_MARGIN_FLAT
+                if (params.get("x_axis_title_margin") or 15) < needed:
+                    offenders.append(f"{path.name}: x_axis_title_margin < {needed}")
+            if params.get("y_axis_title") and (params.get("y_axis_title_margin") or 15) < _Y_MARGIN:
+                offenders.append(f"{path.name}: y_axis_title_margin < {_Y_MARGIN}")
+        assert not offenders, "axis title will overlap its tick labels:\n" + "\n".join(
+            sorted(offenders)
         )
 
     def test_no_chart_uses_a_misspelled_axis_control(

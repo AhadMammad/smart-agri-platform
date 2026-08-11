@@ -17,9 +17,10 @@ params:
   stack: Stack
   y_axis_format: ',.0f'
   x_axis_title: Crop
-  x_axis_title_margin: 30
+  x_axis_title_margin: 75
   xAxisLabelRotation: 45
   y_axis_title: Cost (USD)
+  y_axis_title_margin: 50
   show_legend: true
   x_axis_sort_series: name
 query_context: null

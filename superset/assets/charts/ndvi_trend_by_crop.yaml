@@ -26,7 +26,9 @@ params:
   comparison_type: values
   y_axis_format: ',.2f'
   x_axis_title: Date
+  x_axis_title_margin: 30
   y_axis_title: NDVI
+  y_axis_title_margin: 50
   show_legend: true
   truncateYAxis: false
 query_context: null

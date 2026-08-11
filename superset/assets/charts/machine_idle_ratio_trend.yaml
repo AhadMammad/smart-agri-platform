@@ -18,7 +18,9 @@ params:
   - machine_type
   y_axis_format: ',.1f'
   x_axis_title: Month
+  x_axis_title_margin: 30
   y_axis_title: Idle ratio (%)
+  y_axis_title_margin: 50
   show_legend: true
   truncateYAxis: false
 query_context: null

@@ -24,8 +24,10 @@ params:
   seriesType: bar
   seriesTypeB: line
   y_axis_title: Rainfall (mm)
+  y_axis_title_margin: 50
   y_axis_title_secondary: Soil moisture (%)
   x_axis_title: Date
+  x_axis_title_margin: 30
   show_legend: true
   truncateYAxis: false
 query_context: null

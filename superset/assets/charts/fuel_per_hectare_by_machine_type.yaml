@@ -23,9 +23,10 @@ params:
     comparator: null
   y_axis_format: ',.2f'
   x_axis_title: Machine type
-  x_axis_title_margin: 30
+  x_axis_title_margin: 75
   xAxisLabelRotation: 45
   y_axis_title: Fuel (L/ha)
+  y_axis_title_margin: 50
   show_legend: false
   x_axis_sort_series: name
 query_context: null
