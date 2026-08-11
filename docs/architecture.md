@@ -288,6 +288,25 @@ and renders nothing.
 That pair found a filter keyed on `field_name` — a label that repeats across
 farms, so it had been quietly averaging two fields on two continents.
 
+**`make superset-import` creates charts; it does not update them.** Importing
+over an existing bundle refreshes the dashboards but leaves every chart that
+already exists exactly as it was, `overwrite=True` notwithstanding — so an
+edited `params` block in a chart YAML appears to import cleanly and changes
+nothing. It is silent, and it reads as "the setting had no effect" rather than
+"the setting was never applied".
+
+Because the Superset metadata database is a derived store — every asset is
+version-controlled YAML — the fix is to drop it and let the import rebuild:
+
+```bash
+docker rm -f smart-agri-superset-1 smart-agri-superset-db-1
+docker volume rm smart-agri_superset-db-data
+make up-bi && make superset-import
+```
+
+That touches neither ClickHouse nor the OLTP Postgres; the only thing lost is
+anything created in the UI and never exported back with `make superset-export`.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:
