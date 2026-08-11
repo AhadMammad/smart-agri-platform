@@ -19,6 +19,15 @@ SUPERSET_WEBSERVER_TIMEOUT = 120
 SQLLAB_TIMEOUT = 120
 SUPERSET_LOAD_EXAMPLES = False
 
+# deck.gl charts (e.g. the Farm & Field Map) load mapbox-gl-js client-side,
+# which refuses to initialise a map at all without a non-empty access token —
+# even when, as here, every chart's mapbox_style points at a public
+# CARTO/OSM URL rather than a mapbox:// one and no request ever reaches
+# Mapbox's API. The placeholder below only has to be non-empty; it is not a
+# real credential. Set a real MAPBOX_API_KEY to use Mapbox's own styles
+# instead.
+MAPBOX_API_KEY = os.environ.get("MAPBOX_API_KEY", "not-a-real-mapbox-token")
+
 FEATURE_FLAGS = {
     # Required so `superset import-directory` can load the YAML assets in
     # superset/assets/ as version-controlled dashboards.
