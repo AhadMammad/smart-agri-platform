@@ -61,8 +61,12 @@ CHANNEL_TOLERANCE = 24
 #: Share of one colour above which a capture is treated as blank.
 BLANK_RATIO = 0.995
 
-#: Retries for a blank full-page capture (see `capture`).
+#: Retries for a blank capture (see `capture`).
 CAPTURE_ATTEMPTS = 3
+
+#: Ceiling on the viewport height used to capture a whole dashboard. Chromium
+#: will not allocate an arbitrarily tall surface.
+MAX_CAPTURE_HEIGHT = 8000
 
 #: Superset keeps a spinner in the DOM per loading chart; the dashboard is
 #: settled when none are left.
