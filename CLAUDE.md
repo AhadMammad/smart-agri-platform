@@ -31,6 +31,7 @@ first, plain `uv run` works — but `make` will not.
 | `make test-dags` | DAG integrity tests inside the scheduler container | `dags` |
 | `make test-integration` | integration suite on the platform network | not in CI |
 | `make verify-dashboards` | runs every Superset chart, reports its row count | not in CI |
+| `make screenshot-dashboards` | screenshots every dashboard, diffs against `superset/baselines/`; `UPDATE=1` re-records | not in CI |
 | `shellcheck scripts/*.sh docker/superset/bootstrap.sh` | shell lint | `shell` |
 
 Python under `scripts/` is linted with the same ruff config as `etl/`, but is

@@ -333,6 +333,22 @@ validate-ddl: ## Apply the ClickHouse DDL to a throwaway server and query every 
 check-docs: ## Verify every documented `make` target and relative link still resolves
 	@python3 $(ROOT)/scripts/check_docs.py
 
+.PHONY: screenshot-dashboards
+screenshot-dashboards: ## Screenshot every dashboard and diff against superset/baselines (needs up-bi). UPDATE=1 to re-record
+	@$(COMPOSE) --profile bi ps -q superset | grep -q . \
+	  || { echo "superset is not running — try 'make up-bi'" >&2; exit 1; }
+	@docker build -q \
+	  --build-arg PLAYWRIGHT_IMAGE="$(call envval,PLAYWRIGHT_IMAGE,mcr.microsoft.com/playwright/python:v1.62.0-noble)" \
+	  -t smart-agri-screenshot:local $(ROOT)/docker/screenshot >/dev/null
+	@docker run --rm \
+	  --network "$(call envval,ETL_TASK_NETWORK,smart-agri_agri-net)" \
+	  -e SUPERSET_ADMIN_USER="$(call envval,SUPERSET_ADMIN_USER,admin)" \
+	  -e SUPERSET_ADMIN_PASSWORD="$(call envval,SUPERSET_ADMIN_PASSWORD,admin)" \
+	  -v $(ROOT)/scripts:/work:ro \
+	  -v $(ROOT)/superset/baselines:/baselines \
+	  smart-agri-screenshot:local \
+	  /work/screenshot_dashboards.py $(if $(UPDATE),--update,)
+
 .PHONY: verify-dashboards
 verify-dashboards: ## Run every Superset chart and report whether it returns data
 	@CID=$$($(COMPOSE) --profile bi ps -q superset); \

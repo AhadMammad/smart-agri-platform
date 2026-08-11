@@ -450,3 +450,106 @@ class TestBundleIsImportable:
             "machinery-fleet",
             "yield-economics",
         } <= {doc["slug"] for doc in dashboards.values()}
+
+
+# --- axis label readability --------------------------------------------------
+
+#: The rotation at which a label stops being horizontal. ECharts' own control
+#: offers 0, 45 and 90.
+_ROTATED = 45
+
+#: `x_axis_title_margin` defaults to 15, which is sized for horizontal tick
+#: labels. Rotated labels are taller, so the title needs the next stop up.
+_MARGIN_WHEN_ROTATED = 30
+
+#: Superset's ECharts form-data mixes naming conventions — `x_axis_title_margin`
+#: is snake_case while `xAxisLabelRotation` is camelCase — and an unrecognised
+#: key is dropped without complaint. Maps the plausible wrong spelling to the
+#: real one.
+_MISSPELLED_CONTROLS = {
+    "x_axis_label_rotation": "xAxisLabelRotation",
+    "truncate_x_axis": "truncateXAxis",
+    "x_axis_bounds": "xAxisBounds",
+    "legend_margin": "legendMargin",
+    "xAxisTitleMargin": "x_axis_title_margin",
+    "yAxisTitleMargin": "y_axis_title_margin",
+    "yAxisTitlePosition": "y_axis_title_position",
+}
+
+
+class TestAxisLabelsHaveRoomToRender:
+    """Guards the settings that keep axis labels from colliding.
+
+    A categorical x-axis draws every tick label, and unlike a date axis ECharts
+    does not thin them out as space runs short. Six region names laid flat in a
+    four-column-wide chart overlap into a smear, and the axis title lands on top
+    of them.
+
+    These assert the anti-overlap settings are *present*. They cannot assert the
+    render is actually clean — that depends on data cardinality, font metrics and
+    container width, none of which exist without a browser. `make
+    screenshot-dashboards` is what sees the real thing.
+    """
+
+    @staticmethod
+    def _x_axis_column(
+        doc: dict[str, Any], dataset_by_uuid: dict[str, dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        """The dataset column a chart's `x_axis` names, if it resolves."""
+        x_axis = (doc.get("params") or {}).get("x_axis")
+        dataset = dataset_by_uuid.get(doc.get("dataset_uuid", ""))
+        if not x_axis or dataset is None:
+            return None
+        return next((c for c in dataset.get("columns") or [] if c["column_name"] == x_axis), None)
+
+    def test_categorical_x_axes_rotate_their_labels(
+        self,
+        charts: dict[Path, dict[str, Any]],
+        dataset_by_uuid: dict[str, dict[str, Any]],
+    ) -> None:
+        """A date axis thins its own labels; a category axis draws all of them."""
+        offenders = []
+        for path, doc in charts.items():
+            column = self._x_axis_column(doc, dataset_by_uuid)
+            if column is None or column.get("is_dttm"):
+                continue
+            if not doc["params"].get("xAxisLabelRotation"):
+                offenders.append(f"{path.name} (x_axis={column['column_name']})")
+        assert not offenders, (
+            "categorical x-axis with no xAxisLabelRotation — labels will overlap:\n"
+            + "\n".join(sorted(offenders))
+        )
+
+    def test_rotated_labels_leave_room_for_the_axis_title(
+        self, charts: dict[Path, dict[str, Any]]
+    ) -> None:
+        """Rotated labels are taller, so the default 15 puts the title on them."""
+        offenders = []
+        for path, doc in charts.items():
+            params = doc["params"]
+            if (params.get("xAxisLabelRotation") or 0) < _ROTATED:
+                continue
+            if not params.get("x_axis_title"):
+                continue
+            if (params.get("x_axis_title_margin") or 15) < _MARGIN_WHEN_ROTATED:
+                offenders.append(path.name)
+        assert not offenders, (
+            f"rotated x labels need x_axis_title_margin >= {_MARGIN_WHEN_ROTATED}:\n"
+            + "\n".join(sorted(offenders))
+        )
+
+    def test_no_chart_uses_a_misspelled_axis_control(
+        self, charts: dict[Path, dict[str, Any]]
+    ) -> None:
+        """Superset drops unknown form-data keys silently.
+
+        A control written in the wrong case is not an error anywhere — the chart
+        imports, renders, and simply ignores the setting, which reads as "the fix
+        didn't work" rather than "the key is wrong".
+        """
+        offenders = []
+        for path, doc in charts.items():
+            for wrong, right in _MISSPELLED_CONTROLS.items():
+                if wrong in doc["params"]:
+                    offenders.append(f"{path.name}: {wrong!r} should be {right!r}")
+        assert not offenders, "\n".join(sorted(offenders))

@@ -25,6 +25,8 @@ params:
   stack: Stack
   y_axis_format: ',d'
   x_axis_title: Canopy stage
+  x_axis_title_margin: 30
+  xAxisLabelRotation: 45
   y_axis_title: Observations
   show_legend: true
   x_axis_sort_series: name

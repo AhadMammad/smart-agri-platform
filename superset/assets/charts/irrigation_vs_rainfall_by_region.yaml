@@ -25,6 +25,8 @@ params:
   stack: Stack
   y_axis_format: ',.0f'
   x_axis_title: Region
+  x_axis_title_margin: 30
+  xAxisLabelRotation: 45
   y_axis_title: Water (mm)
   show_legend: true
 query_context: null

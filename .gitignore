@@ -54,6 +54,11 @@ data/out/
 docs/onboarding.html
 docs/vendor/
 
+# ---- Dashboard screenshots ----
+# The baselines in superset/baselines/ are committed; this is where a check run
+# writes what it just captured, for eyeballing against them.
+superset/baselines/current/
+
 # ---- Editors / OS ----
 .idea/
 .vscode/
