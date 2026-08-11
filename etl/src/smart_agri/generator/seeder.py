@@ -177,6 +177,8 @@ class DatasetSeeder:
                     "name": f.name,
                     "area_ha": float(f.area_ha),
                     "soil_type": f.soil_type.value,
+                    "latitude": float(f.latitude),
+                    "longitude": float(f.longitude),
                 }
                 for f in dataset.fields
             ]

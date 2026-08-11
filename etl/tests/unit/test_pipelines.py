@@ -61,6 +61,8 @@ def _field_rows() -> pl.DataFrame:
             "name": ["North Block 1", "South Block 2", "River Block 1"],
             "area_ha": [50.0, 55.0, 100.0],
             "soil_type": ["CLAY", "clay_loam", "sandy"],
+            "latitude": [30.902, 30.898, 11.703],
+            "longitude": [31.103, 31.098, 8.604],
         }
     )
 

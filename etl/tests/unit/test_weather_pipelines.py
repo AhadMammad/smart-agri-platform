@@ -99,6 +99,8 @@ def _field_snapshot() -> pl.DataFrame:
             "name": ["North Block 1", "South Block 2"],
             "area_ha": [50.0, 55.0],
             "soil_type": ["clay", "clay_loam"],
+            "latitude": [30.902, 30.898],
+            "longitude": [31.103, 31.098],
         }
     )
 
@@ -128,6 +130,8 @@ def _silver_dim_field() -> pl.DataFrame:
             "field_name": ["North Block 1", "South Block 2"],
             "area_ha": [50.0, 55.0],
             "soil_type": ["clay", "clay_loam"],
+            "latitude": [30.902, 30.898],
+            "longitude": [31.103, 31.098],
         }
     )
 

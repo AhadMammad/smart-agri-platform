@@ -75,6 +75,8 @@ class Field_(_Entity):  # noqa: N801 - trailing underscore avoids shadowing pyda
     name: str = Field(min_length=1, max_length=120)
     area_ha: Decimal = Field(gt=0, decimal_places=2)
     soil_type: SoilType
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
 
 
 class Sensor(_Entity):

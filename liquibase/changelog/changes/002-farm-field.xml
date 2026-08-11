@@ -102,4 +102,33 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="002-3-field-coordinates" author="data-platform">
+        <!-- Jittered around the parent farm's point at seed time (see
+             generator/generator.py::fields), the same pattern
+             generator/machinery.py uses for telemetry positions.
+
+             Raw SQL rather than <addColumn>: test_seeder_columns.py builds
+             its expected schema from <createTable> elements plus a regex
+             fallback for `ALTER TABLE ... ADD COLUMN` text, so a column
+             added on an existing table has to take that form to be seen.
+             The DEFAULT is dropped immediately after — it exists only so
+             the NOT NULL can be added without failing on a non-empty table
+             from a prior seed run; every real insert still supplies both. -->
+        <sql>
+            ALTER TABLE agri.field ADD COLUMN latitude NUMERIC(9,6) NOT NULL DEFAULT 0;
+            ALTER TABLE agri.field ADD COLUMN longitude NUMERIC(9,6) NOT NULL DEFAULT 0;
+            ALTER TABLE agri.field ALTER COLUMN latitude DROP DEFAULT;
+            ALTER TABLE agri.field ALTER COLUMN longitude DROP DEFAULT;
+            ALTER TABLE agri.field ADD CONSTRAINT ck_field_latitude
+                CHECK (latitude BETWEEN -90 AND 90);
+            ALTER TABLE agri.field ADD CONSTRAINT ck_field_longitude
+                CHECK (longitude BETWEEN -180 AND 180);
+        </sql>
+
+        <rollback>
+            <dropColumn tableName="field" schemaName="agri" columnName="latitude"/>
+            <dropColumn tableName="field" schemaName="agri" columnName="longitude"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

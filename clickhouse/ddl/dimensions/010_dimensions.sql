@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS dim_field
     area_ha    Float64,
     -- LowCardinality because there are six soil classes across millions of
     -- fact rows; it makes the dictionary-encoded join key much cheaper.
-    soil_type  LowCardinality(String)
+    soil_type  LowCardinality(String),
+    latitude   Float64,
+    longitude  Float64
 )
 ENGINE = MergeTree
 ORDER BY field_id

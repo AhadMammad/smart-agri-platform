@@ -1,0 +1,133 @@
+# Farm & field map — a geographic overview.
+#
+# One row: the map, full width. Cuts across the other four dashboards rather
+# than belonging to one, so it stands alone rather than living inside
+# Field & Crop Health.
+dashboard_title: Farm & Field Map
+description: Every farm and field located on a map
+css: ''
+slug: farm-field-map
+uuid: 0156fc8b-8053-4829-ac84-4ad01a71231b
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-header
+      - ROW-map
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Farm & Field Map
+
+  ROW-header:
+    type: ROW
+    id: ROW-header
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 18
+      code: |-
+        ## Farm & Field Map
+
+        Every farm and field in `v_farm_field_locations`, one point each. Fields
+        are jittered around their parent farm's coordinates.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-header
+
+  ROW-map:
+    type: ROW
+    id: ROW-map
+    children:
+      - CHART-farm-field-map
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-farm-field-map:
+    type: CHART
+    id: CHART-farm-field-map
+    children: []
+    meta:
+      width: 12
+      height: 90
+      chartId: null
+      uuid: 470ef020-6731-48a9-909e-61337c669c7e
+      sliceName: Farm & field locations
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-map
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  native_filter_configuration:
+    - id: NATIVE_FILTER-region
+      name: Region
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 7f99d676-5951-4cc4-9be1-c8adf8c962f2
+          column:
+            name: region
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-entity-type
+      name: Type
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 7f99d676-5951-4cc4-9be1-c8adf8c962f2
+          column:
+            name: entity_type
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []

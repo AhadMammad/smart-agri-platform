@@ -71,7 +71,13 @@ DIM_FIELD = SilverSpec(
     rename={"name": "field_name"},
     trim=("field_code", "farm_code", "field_name"),
     lower=("soil_type",),
-    cast={"field_id": pl.Int64, "farm_id": pl.Int64, "area_ha": pl.Float64},
+    cast={
+        "field_id": pl.Int64,
+        "farm_id": pl.Int64,
+        "area_ha": pl.Float64,
+        "latitude": pl.Float64,
+        "longitude": pl.Float64,
+    },
     dedupe_on=("field_id",),
 )
 

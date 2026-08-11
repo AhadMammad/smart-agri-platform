@@ -275,3 +275,44 @@ FROM
     FROM agg_planting_economics
     GROUP BY farm_id, farm_code, region, country_code
 );
+
+
+-- --- Farm & field map ---------------------------------------------------------
+
+-- Every farm and every field as one point each, long rather than two separate
+-- tables, so the map is a single chart over a single dataset. `entity_type`
+-- is the discriminator a chart colours/groups by; `soil_type` only applies to
+-- fields and is NULL on farm rows.
+CREATE OR REPLACE VIEW v_farm_field_locations AS
+SELECT
+    'farm'      AS entity_type,
+    farm_id     AS entity_id,
+    farm_code   AS entity_code,
+    farm_name   AS entity_name,
+    farm_id,
+    farm_code,
+    farm_name,
+    NULL        AS soil_type,
+    country_code,
+    region,
+    latitude,
+    longitude,
+    area_ha
+FROM dim_farm
+UNION ALL
+SELECT
+    'field'         AS entity_type,
+    f.field_id      AS entity_id,
+    f.field_code    AS entity_code,
+    f.field_name    AS entity_name,
+    f.farm_id,
+    f.farm_code,
+    m.farm_name,
+    f.soil_type,
+    m.country_code,
+    m.region,
+    f.latitude,
+    f.longitude,
+    f.area_ha
+FROM dim_field AS f
+INNER JOIN dim_farm AS m ON f.farm_id = m.farm_id;

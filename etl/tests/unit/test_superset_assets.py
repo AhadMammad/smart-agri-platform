@@ -438,10 +438,15 @@ class TestBundleIsImportable:
     def test_all_four_domains_have_a_dashboard(
         self, dashboards: dict[Path, dict[str, Any]]
     ) -> None:
-        """The Phase 7 exit criterion, as an assertion."""
-        assert {doc["slug"] for doc in dashboards.values()} == {
+        """The Phase 7 exit criterion, as an assertion.
+
+        A subset check, not equality: farm-field-map is a cross-cutting
+        geographic overview, not a fifth domain, so its existence shouldn't
+        make this assertion start failing.
+        """
+        assert {
             "field-soil-health",
             "irrigation-water",
             "machinery-fleet",
             "yield-economics",
-        }
+        } <= {doc["slug"] for doc in dashboards.values()}

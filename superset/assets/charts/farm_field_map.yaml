@@ -1,0 +1,50 @@
+# Every farm and field as a point, coloured by entity type.
+#
+# `mapbox_style` points at a public, no-signup OSM-based basemap (CARTO
+# Positron) instead of one of Superset's built-in Mapbox-hosted styles, so no
+# MAPBOX_API_KEY is needed anywhere in this repo. Confirm live against the
+# running Superset 4.1.1 container after import — the deck_scatter control
+# panel's exact accepted param shapes aren't verifiable offline.
+slice_name: Farm & field locations
+description: Every farm and field as a point on the map, coloured by type
+certified_by: null
+certification_details: null
+viz_type: deck_scatter
+params:
+  datasource: 7f99d676-5951-4cc4-9be1-c8adf8c962f2__table
+  viz_type: deck_scatter
+  time_range: No filter
+  row_limit: 10000
+  adhoc_filters: []
+  spatial:
+    type: latlong
+    lonCol: longitude
+    latCol: latitude
+  dimension: entity_type
+  color_scheme: supersetColors
+  point_radius_fixed:
+    type: fix
+    value: 60000
+  point_unit: square_m
+  multiplier: 1
+  min_radius: null
+  max_radius: 100
+  filter_nulls: true
+  mapbox_style: https://basemaps.cartocdn.com/gl/positron-gl-style/style.json
+  viewport:
+    longitude: 5
+    latitude: 15
+    zoom: 3.5
+    bearing: 0
+    pitch: 0
+  legend_position: tr
+  legend_format: null
+  js_columns: []
+  js_data_mutator: null
+  js_tooltip: null
+  js_onclick_href: null
+query_context: null
+cache_timeout: null
+uuid: 470ef020-6731-48a9-909e-61337c669c7e
+version: 1.0.0
+dataset_uuid: 7f99d676-5951-4cc4-9be1-c8adf8c962f2

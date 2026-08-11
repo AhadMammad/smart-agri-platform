@@ -256,6 +256,11 @@ class DatasetGenerator:
                         name=f"{part} Block {n}",
                         area_ha=round(float(farm.area_ha) / self.config.fields_per_farm * 0.9, 2),  # type: ignore[arg-type]
                         soil_type=self._rng.choice(region.soil_types),
+                        # Jittered around the farm's own point, not resampled
+                        # across the region — siblings of one farm should sit
+                        # near each other, not land anywhere in the region.
+                        latitude=round(farm.latitude + self._rng.gauss(0, 0.004), 6),
+                        longitude=round(farm.longitude + self._rng.gauss(0, 0.004), 6),
                     )
                 )
         return result

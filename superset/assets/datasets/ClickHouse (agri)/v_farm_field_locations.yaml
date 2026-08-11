@@ -1,0 +1,200 @@
+# Every farm and every field as one point each.
+#
+# A ClickHouse view rather than a Superset virtual dataset, same reasoning as
+# v_field_water_daily: the union and the farm join belong in one place. See
+# clickhouse/ddl/views/040_domain_views.sql.
+table_name: v_farm_field_locations
+main_dttm_col: null
+description: One row per farm and per field, with coordinates, for the farm/field map
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 7f99d676-5951-4cc4-9be1-c8adf8c962f2
+metrics:
+  - metric_name: count
+    verbose_name: Rows
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: null
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: total_area
+    verbose_name: Total area (ha)
+    metric_type: sum
+    expression: SUM(area_ha)
+    description: null
+    d3format: ',.0f'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: entity_type
+    verbose_name: Type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: farm / field
+    python_date_format: null
+    extra: null
+  - column_name: entity_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: entity_code
+    verbose_name: Code
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: entity_name
+    verbose_name: Name
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_id
+    verbose_name: null
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_code
+    verbose_name: Farm code
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: farm_name
+    verbose_name: Farm
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: soil_type
+    verbose_name: Soil type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: Null on farm rows
+    python_date_format: null
+    extra: null
+  - column_name: country_code
+    verbose_name: Country
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: region
+    verbose_name: Region
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: latitude
+    verbose_name: Latitude
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: longitude
+    verbose_name: Longitude
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: area_ha
+    verbose_name: Area (ha)
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: false
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a
