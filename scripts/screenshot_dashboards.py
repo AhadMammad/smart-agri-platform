@@ -61,6 +61,9 @@ CHANNEL_TOLERANCE = 24
 #: Share of one colour above which a capture is treated as blank.
 BLANK_RATIO = 0.995
 
+#: Retries for a blank full-page capture (see `capture`).
+CAPTURE_ATTEMPTS = 3
+
 #: Superset keeps a spinner in the DOM per loading chart; the dashboard is
 #: settled when none are left.
 LOADING = ".loading, [data-test='loading-indicator'], .chart-status-loading"
