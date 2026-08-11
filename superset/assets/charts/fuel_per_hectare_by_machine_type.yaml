@@ -28,7 +28,7 @@ params:
   y_axis_title: Fuel (L/ha)
   y_axis_title_margin: 50
   show_legend: false
-  x_axis_sort_series: name
+  x_axis_sort: name
 query_context: null
 cache_timeout: null
 uuid: 72a501e2-a367-5aa1-9637-fad270cc6b8d

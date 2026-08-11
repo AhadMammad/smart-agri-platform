@@ -1,12 +1,10 @@
 # Every farm and field as a point, coloured by entity type.
 #
-# `mapbox_style` is an inline raster style pointing straight at OSM's tile
-# servers, not a mapbox:// style or a hosted style.json URL. That style.json
-# route (CARTO's Positron, still no Mapbox account needed) rendered a blank
-# map in practice — everything server-side checked out (data, mapboxApiKey,
-# form_data wiring), which points at the browser-side fetch chain for that
-# style's glyphs/sprite/vector tiles as the break. A raster source needs none
-# of that: just image tiles, no style.json fetch at all.
+# `mapbox_style` is an OSM tile URL, not a `mapbox://` style. Superset 6
+# renders that through deck.gl's own TileLayer and only mounts mapbox-gl for
+# a `mapbox://` style, so no Mapbox account or token is involved. On 4.1.1
+# this rendered blank: mapbox-gl was always mounted, and its v2 billing check
+# permanently blanks the canvas once the token 401s.
 slice_name: Farm & field locations
 description: Every farm and field as a point on the map, coloured by type
 certified_by: null
@@ -32,21 +30,7 @@ params:
   min_radius: null
   max_radius: 100
   filter_nulls: true
-  mapbox_style:
-    version: 8
-    sources:
-      osm:
-        type: raster
-        tiles:
-          - https://a.tile.openstreetmap.org/{z}/{x}/{y}.png
-          - https://b.tile.openstreetmap.org/{z}/{x}/{y}.png
-          - https://c.tile.openstreetmap.org/{z}/{x}/{y}.png
-        tileSize: 256
-        attribution: "© OpenStreetMap contributors"
-    layers:
-      - id: osm
-        type: raster
-        source: osm
+  mapbox_style: https://tile.openstreetmap.org/{z}/{x}/{y}.png
   viewport:
     longitude: 5
     latitude: 15

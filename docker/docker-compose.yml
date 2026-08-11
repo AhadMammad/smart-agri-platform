@@ -463,11 +463,6 @@ services:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      # `:-` default, not a plain ${...}: an existing .env from before this
-      # variable existed would otherwise interpolate to an empty string here,
-      # which — being *set* rather than absent — would silently override
-      # superset_config.py's own fallback and reintroduce the blank-map bug.
-      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-not-a-real-mapbox-token}
     ports:
       - "${SUPERSET_HOST_PORT}:8088"
     volumes:

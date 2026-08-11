@@ -20,9 +20,11 @@ params:
   x_axis_title_margin: 75
   xAxisLabelRotation: 45
   y_axis_title: Cost (USD)
-  y_axis_title_margin: 50
+  # 75, not the 50 the rest use: this axis runs to seven figures, and
+  # "3,000,000" is wide enough to reach the title at 50.
+  y_axis_title_margin: 75
   show_legend: true
-  x_axis_sort_series: name
+  x_axis_sort: name
 query_context: null
 cache_timeout: null
 uuid: a0d8f341-71c9-554a-8ef3-d031392779c9

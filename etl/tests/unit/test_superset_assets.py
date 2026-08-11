@@ -545,6 +545,26 @@ class TestAxisLabelsHaveRoomToRender:
             sorted(offenders)
         )
 
+    def test_no_map_asks_for_a_mapbox_hosted_style(
+        self, charts: dict[Path, dict[str, Any]]
+    ) -> None:
+        """A `mapbox://` style silently brings back the blank basemap.
+
+        Superset 6 renders a tile URL through deck.gl's own TileLayer and only
+        mounts mapbox-gl for a `mapbox://` style. mapbox-gl v2+ validates its
+        token against Mapbox's API and, on the 401 that follows from not having
+        an account, blanks the canvas permanently — a map that loads its data,
+        draws its legend, and shows nothing underneath.
+        """
+        offenders = [
+            path.name
+            for path, doc in charts.items()
+            if str(doc["params"].get("mapbox_style", "")).startswith("mapbox://")
+        ]
+        assert not offenders, "mapbox:// basemap needs a paid-for token to render:\n" + "\n".join(
+            sorted(offenders)
+        )
+
     def test_no_chart_uses_a_misspelled_axis_control(
         self, charts: dict[Path, dict[str, Any]]
     ) -> None:

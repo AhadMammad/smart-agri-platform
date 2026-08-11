@@ -298,7 +298,29 @@ Every tag is pinned in `.env`. Two pins are load-bearing:
 | `typer==0.27.0` | Versions below 0.16 call click's `Parameter.make_metavar()` without a context, which crashes `--help` against click ≥8.2 — and `--help` is the ETL image's default `CMD`. |
 
 The Superset image's `clickhouse-connect` version should be kept aligned with
-the ClickHouse server tag when either is upgraded.
+the ClickHouse server tag when either is upgraded. Superset 6.1 additionally
+requires `clickhouse-connect>=0.13.0,<1.0`, so that pin is not free to move.
+
+### Superset 6 for a basemap that needs no Mapbox account
+
+`apache/superset` is pinned at 6.1.0 rather than the 4.1.1 the rest of the
+platform was built against, because the Farm & Field Map cannot work on 4.x.
+
+deck.gl charts there always mount `mapbox-gl`, and from v2 that library
+authenticates against Mapbox's API on every map load; the 401 you get without
+an account sets an internal flag that makes the renderer return early forever,
+so the basemap is blank while the points and legend draw normally. It is a
+billing gate, not a configuration problem — no style URL or placeholder token
+gets around it, and defeating it would mean circumventing the licence-protected
+billing code in what is, from v2, proprietary software.
+
+Superset 6.0 made OpenStreetMap the default and renders a tile URL through
+deck.gl's own `TileLayer`, mounting `mapbox-gl` only for a `mapbox://` style.
+So an OSM tile URL never touches Mapbox at all. `DECKGL_BASE_MAP` in
+`docker/superset/superset_config.py` is restricted to OSM for exactly that
+reason, and `tile.openstreetmap.org` is already in Superset 6's own CSP
+`connect-src` — pointing it at a different tile host means extending
+`TALISMAN_CONFIG` as well.
 
 ## Operational notes
 

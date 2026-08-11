@@ -6,7 +6,7 @@ USER root
 # clickhouse-connect is the driver behind the `clickhousedb://` SQLAlchemy URI.
 # Keep its version aligned with the ClickHouse server tag pinned in .env.
 RUN pip install --no-cache-dir \
-      "clickhouse-connect==0.8.15" \
+      "clickhouse-connect==0.13.0" \
       "psycopg2-binary==2.9.10"
 
 COPY superset_config.py /app/pythonpath/superset_config.py
