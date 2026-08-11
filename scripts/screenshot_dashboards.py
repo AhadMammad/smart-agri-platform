@@ -138,19 +138,27 @@ def capture(page: Page, slug: str, destination: Path) -> bool:
     page.wait_for_timeout(2_000)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    # Tall dashboards intermittently produce an empty full-page capture even
-    # though the DOM is fully populated (text, canvases and all) — so retry,
-    # and take a throwaway viewport shot first each time: forcing a paint of
-    # the visible area is what makes the full-page one come back correct.
+    # Grow the viewport to the content instead of asking for `full_page`: a
+    # tall dashboard reliably full-page-captures empty here even with a fully
+    # populated DOM, while a viewport tall enough to hold it captures fine.
+    # Retry anyway, taking a throwaway shot first to force a paint.
+    height = min(page.evaluate("document.documentElement.scrollHeight"), MAX_CAPTURE_HEIGHT)
+    page.set_viewport_size({"width": VIEWPORT["width"], "height": height})
+    page.wait_for_timeout(3_000)
+
     for attempt in range(1, CAPTURE_ATTEMPTS + 1):
+        page.evaluate("window.scrollTo(0, 0)")
         page.screenshot()
-        page.screenshot(path=str(destination), full_page=True)
+        page.screenshot(path=str(destination))
         if not is_blank(destination):
+            page.set_viewport_size(VIEWPORT)
             return False
         if attempt < CAPTURE_ATTEMPTS:
             print(f"    {slug} came out blank, retrying ({attempt})", file=sys.stderr)
             page.evaluate(SCROLL_THROUGH)
             page.wait_for_timeout(3_000)
+
+    page.set_viewport_size(VIEWPORT)
 
     print(f"    warning: {slug} looks blank — do not trust it as a baseline", file=sys.stderr)
     return True
