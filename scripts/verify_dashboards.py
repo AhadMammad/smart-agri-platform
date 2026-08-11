@@ -86,6 +86,22 @@ def query_context(params: dict[str, Any], dataset_id: int) -> dict[str, Any]:
         query["columns"] = list(params.get("all_columns") or [])
         query["metrics"] = None
         query["orderby"] = []
+    elif params.get("spatial"):
+        # deck.gl charts name their columns nowhere the other branches look:
+        # the coordinates live under `spatial`, and the series under
+        # `dimension`. Without this the query has neither columns nor metrics
+        # and Superset rejects it as "Empty query?" — which reads as a broken
+        # chart when the chart is fine.
+        spatial = params["spatial"]
+        columns = [spatial.get("lonCol"), spatial.get("latCol")]
+        columns += [spatial.get("lonlatCol"), spatial.get("geohashCol")]
+        if params.get("dimension"):
+            columns.append(params["dimension"])
+        columns += list(params.get("js_columns") or [])
+        query["columns"] = [column for column in dict.fromkeys(columns) if column]
+        radius = params.get("point_radius_fixed") or {}
+        query["metrics"] = [radius["value"]] if radius.get("type") == "metric" else []
+        query["orderby"] = []
     else:
         x_axis = params.get("x_axis")
         columns = [x_axis] if x_axis else []
