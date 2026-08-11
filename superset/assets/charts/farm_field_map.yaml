@@ -27,8 +27,12 @@ params:
     value: 60000
   point_unit: square_m
   multiplier: 1
-  min_radius: null
-  max_radius: 100
+  # Pixel floor and ceiling on the drawn dot (deck.gl's radiusMinPixels /
+  # radiusMaxPixels). Without the floor a point is drawn at its true ground
+  # size — 60000 m² is a ~138 m radius, which is well under a pixel at the
+  # continent zoom this map opens at, so all 25 render invisibly.
+  min_radius: 6
+  max_radius: 24
   filter_nulls: true
   mapbox_style: https://tile.openstreetmap.org/{z}/{x}/{y}.png
   viewport:
