@@ -82,10 +82,17 @@ FREEZE_ANIMATIONS = """
 """
 
 
+#: Superset 4 served a plain form whose inputs carried `name`; Superset 6
+#: renders AntD inputs client-side that carry only `id`. Match either.
+USERNAME_FIELD = "#username, input[name='username']"
+PASSWORD_FIELD = "#password, input[name='password']"
+
+
 def login(page: Page) -> None:
-    page.goto(f"{BASE}/login/", wait_until="domcontentloaded")
-    page.fill("input[name='username']", USER)
-    page.fill("input[name='password']", PASSWORD)
+    page.goto(f"{BASE}/login/", wait_until="networkidle")
+    page.wait_for_selector(USERNAME_FIELD, timeout=60_000)
+    page.fill(USERNAME_FIELD, USER)
+    page.fill(PASSWORD_FIELD, PASSWORD)
     page.click("input[type='submit'], button[type='submit']")
     page.wait_for_load_state("networkidle")
 
