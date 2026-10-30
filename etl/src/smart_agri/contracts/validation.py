@@ -73,8 +73,12 @@ def validate(frame: pl.DataFrame, schema: pa.DataFrameSchema) -> ValidationResul
         bad_indices = _row_indices(failures)
 
         if bad_indices is None:
-            # No row-level indices: the schema failed structurally.
-            logger.error("validation_structural_failure", schema=schema.name)
+            # The schema failed structurally; no subset of the rows is correct.
+            logger.error(
+                "validation_structural_failure",
+                schema=schema.name,
+                checks=_structural_checks(failures),
+            )
             raise
 
         invalid = indexed.filter(pl.col(_INDEX_COLUMN).is_in(bad_indices)).drop(_INDEX_COLUMN)
@@ -106,13 +110,28 @@ def _failure_cases(errors: pandera.errors.SchemaErrors) -> pl.DataFrame:
 
 
 def _row_indices(failures: pl.DataFrame) -> list[int] | None:
-    """Row indices of failing records, or None if the failures are structural."""
+    """Row indices of failing records, or None if any failure is structural.
+
+    pandera gives every row-level failure (range, null, uniqueness, `isin`) an
+    index, and every structural one (wrong dtype, missing or extra column) a null
+    index. A single null is enough to make the whole frame unusable: quarantining
+    only the row-level failures would pass the rest through as "valid" with the
+    structurally broken column still in it.
+    """
     if "index" not in failures.columns:
         return None
-    indices = failures["index"].drop_nulls()
-    if indices.is_empty():
+    indices = failures["index"]
+    if indices.is_empty() or indices.null_count() > 0:
         return None
     return [int(value) for value in indices.unique().to_list()]
+
+
+def _structural_checks(failures: pl.DataFrame) -> list[str]:
+    """`column: check` for each structural failure, so the log names the cause."""
+    if not {"index", "column", "check"} <= set(failures.columns):
+        return []
+    structural = failures.filter(pl.col("index").is_null())
+    return sorted({f"{row['column']}: {row['check']}" for row in structural.iter_rows(named=True)})
 
 
 def _summarise(failures: pl.DataFrame) -> pl.DataFrame:
