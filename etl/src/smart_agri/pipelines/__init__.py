@@ -12,7 +12,7 @@ from smart_agri.pipelines.registry import (
     get_stages,
     pipeline_names,
 )
-from smart_agri.pipelines.silver_spec import JoinSpec, SilverPipeline, SilverSpec
+from smart_agri.pipelines.silver_spec import JoinSpec, RowFilter, SilverPipeline, SilverSpec
 
 __all__ = [
     "DOMAIN_STAGES",
@@ -21,6 +21,7 @@ __all__ = [
     "BasePipeline",
     "JoinSpec",
     "PipelineContext",
+    "RowFilter",
     "RunContext",
     "SilverPipeline",
     "SilverSpec",

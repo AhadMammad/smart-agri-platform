@@ -112,14 +112,14 @@ class GoldFieldCropHealthDailyPipeline(GoldPipeline):
 
         # A cloudy pass carries no usable signal, and averaging it in would drag
         # every field's NDVI toward zero on overcast days.
-        usable = observations.filter(pl.col("usable"))
+        usable = self._filter(observations, pl.col("usable"), name="unusable_observation")
 
+        located = self._inner_join(usable, fields, on="field_id", target="dim_field")
+        located = self._inner_join(located, farms, on="farm_id", target="dim_farm")
         return (
-            usable.join(fields, on="field_id", how="inner")
-            .join(farms, on="farm_id", how="inner")
             # Left from here: an observation between crop cycles has no planting,
             # and that is bare ground rather than a broken join.
-            .join(plantings, on="planting_id", how="left")
+            located.join(plantings, on="planting_id", how="left")
             .join(varieties, on="variety_id", how="left")
             .join(crops, on="crop_code", how="left")
         )
@@ -257,7 +257,7 @@ class GoldFieldIrrigationDailyPipeline(GoldPipeline):
             self._aggregate_events(events) if not events.is_empty() else self._empty_daily(weather)
         )
 
-        return (
+        spine = self._inner_join(
             weather.select(
                 pl.col("weather_date").alias("water_date"),
                 "field_id",
@@ -270,10 +270,12 @@ class GoldFieldIrrigationDailyPipeline(GoldPipeline):
                 "is_actual",
                 pl.col("precipitation_mm").alias("rainfall_mm"),
                 "et0_mm",
-            )
-            .join(fields, on="field_id", how="inner")
-            .join(daily, on=["field_id", "water_date"], how="left")
+            ),
+            fields,
+            on="field_id",
+            target="dim_field",
         )
+        return spine.join(daily, on=["field_id", "water_date"], how="left")
 
     @staticmethod
     def _aggregate_events(events: pl.DataFrame) -> pl.DataFrame:
@@ -415,19 +417,16 @@ class GoldMachineDailyPipeline(GoldPipeline):
             pl.col("speed_kmh").mean().alias("avg_speed_kmh"),
         )
 
-        return (
-            daily_telemetry.join(machines, on="machine_id", how="inner")
-            .join(farms, on="farm_id", how="inner")
-            .join(
-                self._aggregate_operations(self._read_silver_facts("fact_machine_operation")),
-                on=["machine_id", "activity_date"],
-                how="left",
-            )
-            .join(
-                self._aggregate_faults(self._read_silver_facts("fact_machine_fault")),
-                on=["machine_id", "activity_date"],
-                how="left",
-            )
+        owned = self._inner_join(daily_telemetry, machines, on="machine_id", target="dim_machine")
+        owned = self._inner_join(owned, farms, on="farm_id", target="dim_farm")
+        return owned.join(
+            self._aggregate_operations(self._read_silver_facts("fact_machine_operation")),
+            on=["machine_id", "activity_date"],
+            how="left",
+        ).join(
+            self._aggregate_faults(self._read_silver_facts("fact_machine_fault")),
+            on=["machine_id", "activity_date"],
+            how="left",
         )
 
     @staticmethod
@@ -599,12 +598,10 @@ class GoldPlantingEconomicsPipeline(GoldPipeline):
         )
         crops = self._read_silver_dim("dim_crop", run).select("crop_code", "crop_name", "category")
 
-        base = (
-            plantings.join(fields, on="field_id", how="inner")
-            .join(farms, on="farm_id", how="inner")
-            .join(varieties, on="variety_id", how="inner")
-            .join(crops, on="crop_code", how="inner")
-        )
+        base = self._inner_join(plantings, fields, on="field_id", target="dim_field")
+        base = self._inner_join(base, farms, on="farm_id", target="dim_farm")
+        base = self._inner_join(base, varieties, on="variety_id", target="dim_crop_variety")
+        base = self._inner_join(base, crops, on="crop_code", target="dim_crop")
 
         return (
             base.join(self._harvests(), on="planting_id", how="left")
@@ -648,7 +645,9 @@ class GoldPlantingEconomicsPipeline(GoldPipeline):
                 schema={"planting_id": pl.Int64, "cost_total_usd": pl.Float64, **columns}
             )
 
-        attributed = costs.filter(pl.col("planting_id").is_not_null())
+        attributed = self._filter(
+            costs, pl.col("planting_id").is_not_null(), name="unattributed_cost"
+        )
         return attributed.group_by("planting_id").agg(
             pl.col("amount_usd").sum().alias("cost_total_usd"),
             *[
@@ -665,7 +664,7 @@ class GoldPlantingEconomicsPipeline(GoldPipeline):
         if inputs.is_empty():
             return pl.DataFrame(schema={"planting_id": pl.Int64, "input_applications": pl.Int64})
         return (
-            inputs.filter(pl.col("planting_id").is_not_null())
+            self._filter(inputs, pl.col("planting_id").is_not_null(), name="unattributed_input")
             .group_by("planting_id")
             .agg(pl.len().cast(pl.Int64).alias("input_applications"))
         )
@@ -681,7 +680,9 @@ class GoldPlantingEconomicsPipeline(GoldPipeline):
                 }
             )
         return (
-            events.filter(pl.col("planting_id").is_not_null())
+            self._filter(
+                events, pl.col("planting_id").is_not_null(), name="unattributed_irrigation"
+            )
             .group_by("planting_id")
             .agg(
                 pl.len().cast(pl.Int64).alias("irrigation_events"),

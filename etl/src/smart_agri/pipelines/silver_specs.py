@@ -37,7 +37,7 @@ from smart_agri.contracts import (
     SILVER_FACT_MACHINE_TELEMETRY,
     SILVER_FACT_SENSOR_READING,
 )
-from smart_agri.pipelines.silver_spec import JoinSpec, SilverSpec
+from smart_agri.pipelines.silver_spec import JoinSpec, RowFilter, SilverSpec
 
 #: Bring a field's farm across. Used by every fact keyed on a field.
 _FARM_VIA_FIELD = JoinSpec(dataset="field", on=("field_id",), columns=("farm_id",))
@@ -111,7 +111,7 @@ FACT_SENSOR_READING = SilverSpec(
     # measurements, and averaging them drags every field metric off. Faulty
     # probes are kept — their readings are real, and Gold decides what to do
     # with them.
-    filters=(pl.col("status") != "decommissioned",),
+    filters=(RowFilter("decommissioned_sensor", pl.col("status") != "decommissioned"),),
     derive={"reading_date": pl.col("reading_ts").dt.date()},
     cast={"reading_id": pl.Int64, "sensor_id": pl.Int64, "field_id": pl.Int64, "farm_id": pl.Int64},
     dedupe_on=("reading_id",),

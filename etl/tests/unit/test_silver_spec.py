@@ -16,13 +16,15 @@ from pandera.engines import polars_engine
 from tests.fakes import FakeClickHouseSink, FakeControlStore, FakeHdfsStore, FakePostgresSource
 
 from smart_agri.config import LakeZone
+from smart_agri.io.control import RunStatus
 from smart_agri.pipelines.base import PipelineContext
 from smart_agri.pipelines.bronze import (
     DATA_FILE,
     INGEST_PARTITION_KEY,
     SNAPSHOT_PARTITION_KEY,
 )
-from smart_agri.pipelines.silver_spec import JoinSpec, SilverPipeline, SilverSpec
+from smart_agri.pipelines.silver_spec import JoinSpec, RowFilter, SilverPipeline, SilverSpec
+from smart_agri.quality import DataQualityError, Severity
 
 LOGICAL_DATE = date(2026, 8, 1)
 PARTITION = LOGICAL_DATE.isoformat()
@@ -265,7 +267,7 @@ class TestFiltersAndDerivations:
             dataset="widget",
             bronze="widget",
             schema=SIMPLE_SCHEMA,
-            filters=(pl.col("colour") != "scrap",),
+            filters=(RowFilter("scrap", pl.col("colour") != "scrap"),),
         )
         run(spec, context)
         assert silver_of(hdfs, spec)["widget_id"].to_list() == [1, 3]
@@ -410,3 +412,111 @@ class TestPartitioning:
         )
         run(spec, context)
         assert silver_of(hdfs, spec)["widget_id"].to_list() == [1, 2, 3]
+
+
+JOINED = pa.DataFrameSchema(
+    {
+        "widget_id": pa.Column(polars_engine.Int64),
+        "box_id": pa.Column(polars_engine.Int64),
+        "colour": pa.Column(polars_engine.String),
+    },
+    strict=True,
+    name="silver_widget_counted",
+)
+
+
+def _orphan_spec(join: JoinSpec) -> SilverSpec:
+    return SilverSpec(dataset="widget", bronze="widget", schema=JOINED, joins=(join,))
+
+
+class TestDropCounting:
+    """Every row Silver drops is counted, so an emptied mart has a cause on record."""
+
+    @pytest.fixture
+    def control(self, context: PipelineContext) -> FakeControlStore:
+        return context.control  # type: ignore[return-value]
+
+    @pytest.fixture(autouse=True)
+    def _orphaned_widget(self, hdfs: FakeHdfsStore) -> None:
+        put_bronze(hdfs, "widget", pl.DataFrame({"widget_id": [1, 2, 3], "box_id": [10, 10, 99]}))
+        put_bronze(hdfs, "box", pl.DataFrame({"box_id": [10], "colour": ["red"]}))
+
+    def test_an_orphan_is_counted_and_warned_by_default(
+        self, context: PipelineContext, control: FakeControlStore, hdfs: FakeHdfsStore
+    ) -> None:
+        spec = _orphan_spec(JoinSpec(dataset="box", on=("box_id",), columns=("colour",)))
+        run(spec, context)
+
+        (check,) = control.checks_named("join.box")
+        assert check["outcome"] == "warned"
+        assert (check["rows_failed"], check["rows_evaluated"]) == (1, 3)
+        assert check["details"].obj["sample_keys"] == [{"box_id": 99}]
+        assert silver_of(hdfs, spec)["widget_id"].to_list() == [1, 2]
+
+    def test_an_error_threshold_leaves_the_partition_unwritten(
+        self, context: PipelineContext, control: FakeControlStore, hdfs: FakeHdfsStore
+    ) -> None:
+        """A broken parent extract must not silently publish a two-thirds table."""
+        spec = _orphan_spec(
+            JoinSpec(
+                dataset="box",
+                on=("box_id",),
+                columns=("colour",),
+                max_drop_rate=0.1,
+                severity=Severity.ERROR,
+            )
+        )
+
+        with pytest.raises(DataQualityError, match=r"join\.box"):
+            run(spec, context)
+
+        with pytest.raises(KeyError):
+            silver_of(hdfs, spec)
+        assert control.last_run["status"] is RunStatus.FAILED
+
+    def test_a_tolerated_drop_rate_passes(
+        self, context: PipelineContext, control: FakeControlStore
+    ) -> None:
+        spec = _orphan_spec(
+            JoinSpec(
+                dataset="box",
+                on=("box_id",),
+                columns=("colour",),
+                max_drop_rate=0.5,
+                severity=Severity.ERROR,
+            )
+        )
+        run(spec, context)
+        assert control.checks_named("join.box")[0]["outcome"] == "passed"
+
+    def test_filters_and_duplicates_are_measured_not_judged(
+        self, context: PipelineContext, control: FakeControlStore, hdfs: FakeHdfsStore
+    ) -> None:
+        put_bronze(
+            hdfs,
+            "widget",
+            pl.DataFrame(
+                {
+                    "widget_id": [1, 2, 2, 3],
+                    "widget_code": ["a", "b", "b", "c"],
+                    "colour": ["red", "blue", "blue", "scrap"],
+                }
+            ),
+        )
+        spec = SilverSpec(
+            dataset="widget",
+            bronze="widget",
+            schema=SIMPLE_SCHEMA,
+            filters=(RowFilter("scrap", pl.col("colour") != "scrap"),),
+            dedupe_on=("widget_id",),
+        )
+        run(spec, context)
+
+        (dropped,) = control.checks_named("filter.scrap")
+        (duplicates,) = control.checks_named("dedupe.widget_id")
+        assert (dropped["outcome"], dropped["rows_failed"], dropped["threshold"]) == (
+            "passed",
+            1,
+            None,
+        )
+        assert (duplicates["outcome"], duplicates["rows_failed"]) == ("passed", 1)

@@ -27,11 +27,16 @@ from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
     import uuid
+    from collections.abc import Sequence
     from datetime import date
 
     import pandera.polars as pa
 
 logger = get_logger(__name__)
+
+#: Unmatched join keys kept in a check's details: enough to start a diagnosis
+#: without turning one result row into a copy of the orphaned data.
+_SAMPLE_KEYS = 5
 
 
 class PipelineContext:
@@ -200,6 +205,84 @@ class BasePipeline(ABC):
                 results=len(self.checks.results),
                 error=str(exc),
             )
+
+    # -- counted joins and filters -------------------------------------------
+    def _inner_join(
+        self,
+        left: pl.DataFrame,
+        right: pl.DataFrame,
+        *,
+        on: str | Sequence[str],
+        target: str,
+        max_drop_rate: float | None = 0.0,
+        severity: Severity = Severity.WARN,
+    ) -> pl.DataFrame:
+        """An inner join that records how many left rows found no match.
+
+        An inner join is how an orphan fact is kept off a dashboard — and also
+        how a broken parent extract silently empties a mart. The count is what
+        tells the two apart. The default flags any orphan as a warning;
+        `max_drop_rate=None` only measures, for a join that drops by design.
+        """
+        keys = [on] if isinstance(on, str) else list(on)
+        orphans = left.join(right.select(keys).unique(), on=keys, how="anti")
+        self.checks.evaluate_rate(
+            f"join.{target}",
+            CheckType.JOIN,
+            failed=orphans.height,
+            total=left.height,
+            max_rate=max_drop_rate,
+            severity=severity,
+            dataset=self.dataset,
+            target=target,
+            details={
+                "on": keys,
+                "sample_keys": orphans.select(keys).unique().head(_SAMPLE_KEYS).to_dicts(),
+            },
+        )
+        return left.join(right, on=keys, how="inner")
+
+    def _filter(
+        self,
+        frame: pl.DataFrame,
+        condition: pl.Expr,
+        *,
+        name: str,
+        max_drop_rate: float | None = None,
+        severity: Severity = Severity.WARN,
+    ) -> pl.DataFrame:
+        """A filter that records how many rows it removed.
+
+        Measured only by default: most filters drop rows by design, and a
+        threshold belongs on the ones where a sudden rise means a source broke.
+        """
+        kept = frame.filter(condition)
+        self.checks.evaluate_rate(
+            f"filter.{name}",
+            CheckType.FILTER,
+            failed=frame.height - kept.height,
+            total=frame.height,
+            max_rate=max_drop_rate,
+            severity=severity,
+            dataset=self.dataset,
+            target=name,
+        )
+        return kept
+
+    def _dedupe_on(self, frame: pl.DataFrame, keys: Sequence[str]) -> pl.DataFrame:
+        """Keep the last row per key, and record how many were duplicates."""
+        unique = frame.unique(subset=list(keys), keep="last")
+        self.checks.evaluate_rate(
+            f"dedupe.{'+'.join(keys)}",
+            CheckType.DEDUPE,
+            failed=frame.height - unique.height,
+            total=frame.height,
+            max_rate=None,
+            severity=Severity.WARN,
+            dataset=self.dataset,
+            target="+".join(keys),
+        )
+        return unique
 
     # -- helpers -------------------------------------------------------------
     def _validate(self, frame: pl.DataFrame, run: RunContext) -> tuple[pl.DataFrame, int]:

@@ -142,7 +142,7 @@ class SilverFactWeatherDailyPipeline(_WeatherPipeline):
 
         weather = pl.concat(combined, how="vertical_relaxed")
         farms = self._read_bronze_snapshot("farm", run).select("farm_id", "farm_code")
-        return weather.join(farms, on="farm_code", how="inner")
+        return self._inner_join(weather, farms, on="farm_code", target="farm")
 
     def _read_bronze_weather(self, dataset: str) -> pl.DataFrame:
         """Read every ingest partition of a Bronze weather dataset.
@@ -269,9 +269,12 @@ class GoldFieldWeatherDailyPipeline(_WeatherPipeline):
         )
         farms = self._read_silver_dim("dim_farm", run).select("farm_id", "region", "country_code")
 
-        return weather.join(fields, on="farm_id", how="inner").join(
-            farms, on="farm_id", how="inner"
+        # Fans each farm's weather out to its fields. A farm without fields
+        # drops its weather legitimately, so that join is measured, not judged.
+        per_field = self._inner_join(
+            weather, fields, on="farm_id", target="dim_field", max_drop_rate=None
         )
+        return self._inner_join(per_field, farms, on="farm_id", target="dim_farm")
 
     def _read_silver_dim(self, dataset: str, run: RunContext) -> pl.DataFrame:
         path = self.context.hdfs.zone_path(

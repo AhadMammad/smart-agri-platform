@@ -111,16 +111,19 @@ class GoldFieldSoilDailyPipeline(GoldPipeline):
         farms = self._read_silver_dim("dim_farm", run)
         fields = self._read_silver_dim("dim_field", run)
 
-        return facts.join(
+        with_fields = self._inner_join(
+            facts,
             fields.select("field_id", "field_code", "field_name", "soil_type", "area_ha").rename(
                 {"area_ha": "field_area_ha"}
             ),
             on="field_id",
-            how="inner",
-        ).join(
+            target="dim_field",
+        )
+        return self._inner_join(
+            with_fields,
             farms.select("farm_id", "farm_code", "farm_name", "country_code", "region"),
             on="farm_id",
-            how="inner",
+            target="dim_farm",
         )
 
     def transform(self, frame: pl.DataFrame, run: RunContext) -> pl.DataFrame:  # noqa: ARG002

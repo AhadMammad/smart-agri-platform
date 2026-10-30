@@ -679,6 +679,19 @@ class TestGoldPlantingEconomics:
         get_pipeline("gold.planting_economics", context).run(LOGICAL_DATE)
         return read_gold("planting_economics")
 
+    def test_every_dimension_join_and_attribution_filter_is_counted(
+        self, economics: pl.DataFrame, context: PipelineContext
+    ) -> None:
+        """A missing dimension would empty this mart; the count is what says why."""
+        del economics
+        control: FakeControlStore = context.control  # type: ignore[assignment]
+        recorded = {c["check_name"]: c for c in control.checks}
+
+        for dim in ("dim_field", "dim_farm", "dim_crop_variety", "dim_crop"):
+            assert recorded[f"join.{dim}"]["outcome"] == "passed"
+        for source in ("cost", "input", "irrigation"):
+            assert recorded[f"filter.unattributed_{source}"]["threshold"] is None
+
     def test_one_row_per_planting(self, economics: pl.DataFrame) -> None:
         assert economics.height == 2
         assert economics["planting_id"].to_list() == [100, 101]

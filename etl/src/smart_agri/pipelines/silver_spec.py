@@ -30,6 +30,7 @@ from smart_agri.pipelines.bronze import (
     INGEST_PARTITION_KEY,
     SNAPSHOT_PARTITION_KEY,
 )
+from smart_agri.quality import Severity
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
@@ -58,12 +59,35 @@ class JoinSpec:
 
     Always an inner join. A fact whose parent is missing is a referential break,
     and letting it through with a null key would put an orphan on a dashboard.
+    The rows the join drops are counted, and by default any at all is a warning.
     """
 
     dataset: str
     on: tuple[str, ...]
     columns: tuple[str, ...]
     """Columns to bring across, besides the join keys."""
+
+    max_drop_rate: float | None = 0.0
+    """Share of rows that may find no parent before the check breaches."""
+
+    severity: Severity = Severity.WARN
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class RowFilter:
+    """Rows Silver excludes by design, under a name the drop count is recorded by.
+
+    Measured, not judged, unless given a threshold: excluding decommissioned
+    sensors is the point of the filter, but excluding all of them overnight
+    would mean the source changed.
+    """
+
+    name: str
+    keep: pl.Expr
+    """Rows for which this is true are kept."""
+
+    max_drop_rate: float | None = None
+    severity: Severity = Severity.WARN
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -78,7 +102,7 @@ class SilverSpec:
     """Read the ingest partition rather than the snapshot partition."""
 
     joins: tuple[JoinSpec, ...] = ()
-    filters: tuple[pl.Expr, ...] = ()
+    filters: tuple[RowFilter, ...] = ()
     """Rows to exclude, evaluated after the joins so they can use joined columns.
 
     Filtering is a Silver concern, not a Bronze one: Bronze keeps whatever the
@@ -139,18 +163,23 @@ class SilverPipeline(BasePipeline):
             # column selection below.
             clash = [c for c in join.columns if c in frame.columns]
             source = frame.drop(clash) if clash else frame
-            frame = source.join(lookup.select(wanted), on=list(join.on), how="inner")
+            frame = self._inner_join(
+                source,
+                lookup.select(wanted),
+                on=join.on,
+                target=join.dataset,
+                max_drop_rate=join.max_drop_rate,
+                severity=join.severity,
+            )
 
-        if self.spec.filters:
-            before = frame.height
-            for condition in self.spec.filters:
-                frame = frame.filter(condition)
-            if frame.height != before:
-                logger.info(
-                    "silver_filtered",
-                    pipeline=self.name,
-                    excluded=before - frame.height,
-                )
+        for row_filter in self.spec.filters:
+            frame = self._filter(
+                frame,
+                row_filter.keep,
+                name=row_filter.name,
+                max_drop_rate=row_filter.max_drop_rate,
+                severity=row_filter.severity,
+            )
 
         return frame
 
@@ -234,15 +263,7 @@ class SilverPipeline(BasePipeline):
         if not spec.dedupe_on:
             return frame
 
-        before = frame.height
-        frame = frame.unique(subset=list(spec.dedupe_on), keep="last")
-        if frame.height != before:
-            logger.info(
-                "silver_deduplicated",
-                pipeline=self.name,
-                dropped=before - frame.height,
-                key=list(spec.dedupe_on),
-            )
+        frame = self._dedupe_on(frame, spec.dedupe_on)
         # Sorted on the primary key so a re-run writes byte-identical Parquet.
         return frame.sort(next(iter(spec.schema.columns)))
 
