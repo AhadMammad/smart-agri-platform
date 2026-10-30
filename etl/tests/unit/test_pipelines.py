@@ -28,6 +28,7 @@ from smart_agri.pipelines.bronze import (
     SNAPSHOT_PARTITION_KEY,
 )
 from smart_agri.pipelines.gold import DRY_THRESHOLD_PCT, RUN_PARTITION_KEY, WET_THRESHOLD_PCT
+from smart_agri.quality import DataQualityError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -286,7 +287,7 @@ class TestBasePipelineTemplate:
             def load(self, frame: pl.DataFrame, run: RunContext) -> int:
                 return frame.height
 
-        with pytest.raises(ValueError, match="above the 10% threshold"):
+        with pytest.raises(DataQualityError, match=r"rejection_rate observed=0\.75 threshold=0\.1"):
             Strict(context).run(LOGICAL_DATE)
 
     def test_context_builds_connectors_lazily(self) -> None:

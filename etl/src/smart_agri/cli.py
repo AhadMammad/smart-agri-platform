@@ -9,8 +9,9 @@ pipeline object, and delegate.
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -18,6 +19,9 @@ from smart_agri import __version__
 from smart_agri.config import get_settings
 from smart_agri.health import run_health_checks
 from smart_agri.utils import configure_logging
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 app = typer.Typer(
     name="smart-agri",
@@ -34,6 +38,28 @@ _DateOption = Annotated[
         help="Logical date as YYYY-MM-DD. Defaults to today (UTC).",
     ),
 ]
+
+
+#: Exit code for a run stopped by an error-severity data quality check, distinct
+#: from 1 (a crash) and 2 (bad arguments) so a caller can tell them apart.
+DQ_FAILURE_EXIT_CODE = 3
+
+
+@contextmanager
+def _data_quality_exit() -> Iterator[None]:
+    """Turn a `DataQualityError` into a readable report and exit code 3.
+
+    The import is deferred like every pipeline import here, so `--help` stays fast.
+    """
+    from smart_agri.quality import DataQualityError
+
+    try:
+        yield
+    except DataQualityError as exc:
+        typer.echo(f"{exc.pipeline}: stopped by data quality checks", err=True)
+        for failure in exc.failures:
+            typer.echo(f"  {failure}", err=True)
+        raise typer.Exit(code=DQ_FAILURE_EXIT_CODE) from None
 
 
 def _resolve_date(value: str | None) -> date:
@@ -125,7 +151,8 @@ def run(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from None
 
-    stats = job.run(target)
+    with _data_quality_exit():
+        stats = job.run(target)
     typer.echo(
         f"{pipeline}: read={stats.rows_read} written={stats.rows_written} "
         f"quarantined={stats.rows_quarantined}"
@@ -147,7 +174,8 @@ def run_all(logical_date: _DateOption = None) -> None:
     for index, stage in enumerate(SOIL_SENSOR_STAGES, start=1):
         typer.echo(f"--- stage {index} ---")
         for name in stage:
-            stats = get_pipeline(name, context).run(target)
+            with _data_quality_exit():
+                stats = get_pipeline(name, context).run(target)
             typer.echo(
                 f"  {name}: read={stats.rows_read} written={stats.rows_written} "
                 f"quarantined={stats.rows_quarantined}"
@@ -180,7 +208,8 @@ def run_domain(
     for index, stage in enumerate(stages, start=1):
         typer.echo(f"--- stage {index} ---")
         for name in stage:
-            stats = get_pipeline(name, context).run(target)
+            with _data_quality_exit():
+                stats = get_pipeline(name, context).run(target)
             typer.echo(
                 f"  {name}: read={stats.rows_read} written={stats.rows_written} "
                 f"quarantined={stats.rows_quarantined}"
@@ -217,7 +246,8 @@ def weather(logical_date: _DateOption = None) -> None:
     for index, stage in enumerate(WEATHER_STAGES, start=1):
         typer.echo(f"--- stage {index} ---")
         for name in stage:
-            stats = get_pipeline(name, context).run(target)
+            with _data_quality_exit():
+                stats = get_pipeline(name, context).run(target)
             typer.echo(
                 f"  {name}: read={stats.rows_read} written={stats.rows_written} "
                 f"quarantined={stats.rows_quarantined}"

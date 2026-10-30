@@ -22,9 +22,11 @@ from smart_agri.config import LakeZone, Settings, get_settings
 from smart_agri.contracts import ValidationResult, validate
 from smart_agri.io import ClickHouseSink, ControlStore, HdfsStore, PostgresSource, RunStats
 from smart_agri.io.control import RunStatus
+from smart_agri.quality import CheckCollector, CheckResult, CheckType, Outcome, Severity
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
+    import uuid
     from datetime import date
 
     import pandera.polars as pa
@@ -110,6 +112,9 @@ class BasePipeline(ABC):
 
     def __init__(self, context: PipelineContext | None = None) -> None:
         self.context = context or PipelineContext()
+        #: Results of the current run. Replaced at the start of each `run`; built
+        #: here too so a step exercised on its own still has somewhere to record.
+        self.checks = CheckCollector(self.name)
 
     # -- steps ---------------------------------------------------------------
     @abstractmethod
@@ -126,30 +131,41 @@ class BasePipeline(ABC):
 
     # -- orchestration -------------------------------------------------------
     def run(self, logical_date: date) -> RunStats:
-        """Execute the pipeline, recording the outcome in the run log.
+        """Execute the pipeline, recording the outcome and every check result.
+
+        Data quality gates sit either side of `load`: an error-severity breach
+        before it means nothing is written, one after it means downstream stages
+        never start. Either way the results are persisted before the run is
+        closed, so a failed run always says which check stopped it.
 
         A failure is logged and re-raised: the Airflow task must fail, and the
         run-log row must say why.
         """
         run = RunContext(logical_date=logical_date, pipeline=self.name)
         log = logger.bind(pipeline=self.name, logical_date=run.partition)
+        self.checks = CheckCollector(self.name, enforce=self.context.settings.dq.enforce)
         run_id = self.context.control.start_run(self.name, logical_date)
+        rows_read = written = quarantined = 0
 
         try:
             extracted = self.extract(run)
+            rows_read = extracted.height
             transformed = self.transform(extracted, run)
             validated, quarantined = self._validate(transformed, run)
+            self._pre_load_checks(validated, run)
+            self.checks.raise_for_errors()
             written = self.load(validated, run)
+            self._post_load_checks(written, run)
+            self.checks.raise_for_errors()
+            self.context.control.record_checks(run_id, self.name, logical_date, self.checks.results)
         except Exception as exc:
-            self.context.control.finish_run(run_id, RunStatus.FAILED, error=str(exc))
+            self._persist_checks_best_effort(run_id, run)
+            partial = RunStats(rows_read, written, quarantined)
+            self.context.control.finish_run(run_id, RunStatus.FAILED, partial, error=str(exc))
             log.error("pipeline_failed", error=str(exc), error_type=type(exc).__name__)
             raise
 
-        stats = RunStats(
-            rows_read=extracted.height,
-            rows_written=written,
-            rows_quarantined=quarantined,
-        )
+        stats = RunStats(rows_read=rows_read, rows_written=written, rows_quarantined=quarantined)
         self.context.control.finish_run(run_id, RunStatus.SUCCESS, stats)
         log.info(
             "pipeline_succeeded",
@@ -159,23 +175,75 @@ class BasePipeline(ABC):
         )
         return stats
 
+    # -- data quality hooks ----------------------------------------------------
+    # Optional, like `transform`: most pipelines add nothing here.
+    def _pre_load_checks(self, frame: pl.DataFrame, run: RunContext) -> None:  # noqa: B027
+        """Checks on the validated frame. An error here means nothing is written."""
+
+    def _post_load_checks(self, written: int, run: RunContext) -> None:  # noqa: B027
+        """Checks on what `load` wrote. An error here stops downstream stages."""
+
+    def _persist_checks_best_effort(self, run_id: uuid.UUID, run: RunContext) -> None:
+        """Record results on the failure path without masking the real error.
+
+        If etl-meta-db is what failed, this fails too; the original exception is
+        the one the operator needs, so this one is logged and swallowed.
+        """
+        try:
+            self.context.control.record_checks(
+                run_id, self.name, run.logical_date, self.checks.results
+            )
+        except Exception as exc:  # the original failure must propagate, not this
+            logger.error(
+                "dq_results_not_recorded",
+                pipeline=self.name,
+                results=len(self.checks.results),
+                error=str(exc),
+            )
+
     # -- helpers -------------------------------------------------------------
     def _validate(self, frame: pl.DataFrame, run: RunContext) -> tuple[pl.DataFrame, int]:
-        """Validate against `schema`, diverting failures to quarantine."""
+        """Validate against `schema`, diverting failures to quarantine.
+
+        Records one result per failing (column, check) and one for the overall
+        rejection rate. The rate is the gate: above `max_rejection_rate` the run
+        fails and nothing is quarantined, because the frame as a whole is wrong.
+        """
         if self.schema is None:
             return frame, 0
 
         result = validate(frame, self.schema)
 
-        if result.rows_invalid:
-            if result.rejection_rate > self.max_rejection_rate:
-                msg = (
-                    f"{self.name}: {result.rows_invalid} of {result.rows_in} rows failed "
-                    f"validation ({result.rejection_rate:.1%}), above the "
-                    f"{self.max_rejection_rate:.0%} threshold. "
-                    f"Failing checks: {result.failure_summary.to_dicts()}"
+        for failure in result.failure_summary.iter_rows(named=True):
+            self.checks.record(
+                CheckResult(
+                    check_name=f"schema.{failure['column']}.{failure['check']}",
+                    check_type=CheckType.SCHEMA,
+                    severity=Severity.WARN,
+                    outcome=Outcome.WARNED,
+                    dataset=self.dataset,
+                    target=failure["column"],
+                    observed_value=failure["failed_rows"] / result.rows_in,
+                    rows_evaluated=result.rows_in,
+                    rows_failed=failure["failed_rows"],
+                    details={"schema": self.schema.name, "check": failure["check"]},
                 )
-                raise ValueError(msg)
+            )
+
+        gate = self.checks.evaluate_rate(
+            "rejection_rate",
+            CheckType.REJECTION_RATE,
+            failed=result.rows_invalid,
+            total=result.rows_in,
+            max_rate=self.max_rejection_rate,
+            severity=Severity.ERROR,
+            dataset=self.dataset,
+            details={"schema": self.schema.name},
+        )
+        if gate.outcome is Outcome.FAILED:
+            self.checks.raise_for_errors()
+
+        if result.rows_invalid:
             self._quarantine(result, run)
 
         return result.valid, result.rows_invalid

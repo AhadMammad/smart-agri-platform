@@ -54,6 +54,7 @@ x-airflow-common: &airflow-common
     # forwards them into each task container (see airflow/dags/common/etl_task.py).
     SMART_AGRI_ENV: ${SMART_AGRI_ENV:-dev}
     SMART_AGRI_LOG_LEVEL: ${SMART_AGRI_LOG_LEVEL:-INFO}
+    SMART_AGRI_DQ_ENFORCE: ${SMART_AGRI_DQ_ENFORCE:-true}
     POSTGRES_HOST: ${POSTGRES_HOST}
     POSTGRES_PORT: ${POSTGRES_PORT}
     POSTGRES_DB: ${POSTGRES_DB}

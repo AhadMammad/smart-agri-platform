@@ -6,6 +6,7 @@ import pytest
 
 from smart_agri.config import (
     ClickHouseSettings,
+    DataQualitySettings,
     EtlMetaSettings,
     HdfsSettings,
     LakeZone,
@@ -55,6 +56,18 @@ class TestEtlMetaSettings:
     def test_password_is_not_leaked_by_model_dump(self) -> None:
         cfg = EtlMetaSettings(password="s3cret")  # type: ignore[arg-type]
         assert "s3cret" not in str(cfg.model_dump())
+
+
+class TestDataQualitySettings:
+    def test_enforcement_is_on_by_default(self) -> None:
+        """Off by default would let every error-severity breach through."""
+        assert DataQualitySettings().enforce is True
+
+    def test_enforcement_can_be_disabled_for_a_backfill(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SMART_AGRI_DQ_ENFORCE", "false")
+        assert Settings().dq.enforce is False
 
 
 class TestClickHouseSettings:

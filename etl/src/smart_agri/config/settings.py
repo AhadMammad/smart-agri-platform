@@ -175,6 +175,17 @@ class OpenMeteoSettings(_Base):
     backfill_start: date = Field(default=date(2025, 8, 1))
 
 
+class DataQualitySettings(_Base):
+    """How data quality checks behave at run time."""
+
+    model_config = SettingsConfigDict(env_prefix="SMART_AGRI_DQ_", extra="ignore")
+
+    #: When false, an error-severity breach is recorded as a warning and the run
+    #: continues. The escape hatch for a backfill over history already known to
+    #: be bad — never the default, because it is how bad data reaches a dashboard.
+    enforce: bool = True
+
+
 class Settings(_Base):
     """Root settings object. Compose the service blocks; do not nest env prefixes."""
 
@@ -187,6 +198,7 @@ class Settings(_Base):
     hdfs: HdfsSettings = Field(default_factory=HdfsSettings)
     hive: HiveSettings = Field(default_factory=HiveSettings)
     open_meteo: OpenMeteoSettings = Field(default_factory=OpenMeteoSettings)
+    dq: DataQualitySettings = Field(default_factory=DataQualitySettings)
 
 
 @lru_cache(maxsize=1)
