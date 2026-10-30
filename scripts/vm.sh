@@ -28,6 +28,7 @@ usage: scripts/vm.sh <command> [args]
   logs <service> [n]  last n lines (default 40) of a container's logs
   ch '<sql>'          run a query against the ClickHouse analytics database
   psql '<sql>'        run a query against the Postgres source database
+  meta '<sql>'        run a query against etl-meta-db (watermarks, run log, DQ results)
   tunnel [service]    SSH-forward a VM service to localhost (hive|postgres|clickhouse|superset; default hive)
                        foreground — Ctrl-C to close
 
@@ -128,6 +129,16 @@ cmd_psql() {
             -qAt -c \"$1\""
 }
 
+# The ETL_META_* keys postdate many existing .env files, so each falls back to
+# the same default the compose file uses.
+cmd_meta() {
+  [ $# -ge 1 ] || die "meta needs a query: scripts/vm.sh meta 'SELECT 1'"
+  remote "docker exec ${CONTAINER_PREFIX}-etl-meta-db-1 psql \
+            -U \"\$( (grep -E '^ETL_META_USER=' .env || echo =etl) | cut -d= -f2)\" \
+            -d \"\$( (grep -E '^ETL_META_DB=' .env || echo =etl_meta) | cut -d= -f2)\" \
+            -qAt -c \"$1\""
+}
+
 # Forwards a single VM-local port to the same port on 127.0.0.1 here, over
 # SSH. Bound to loopback only, so nothing on the LAN can ride the tunnel.
 # Runs in the foreground (-N: no remote command) so an accidental orphaned
@@ -159,7 +170,7 @@ COMMAND="$1"; shift
 
 case "$COMMAND" in
   -h|--help|help) usage; exit 0 ;;
-  status|sync|exec|make|logs|ch|psql|tunnel)
+  status|sync|exec|make|logs|ch|psql|meta|tunnel)
     load_connection
     "cmd_$COMMAND" "$@"
     ;;

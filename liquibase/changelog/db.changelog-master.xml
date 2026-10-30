@@ -26,4 +26,7 @@
     <include file="changes/009-machinery.xml" relativeToChangelogFile="true"/>
     <include file="changes/010-imagery.xml" relativeToChangelogFile="true"/>
 
+    <!-- Phase 9: the ETL's bookkeeping moves to etl-meta-db -->
+    <include file="changes/011-drop-etl-control.xml" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

@@ -30,6 +30,12 @@ _FORWARDED_ENV_VARS: tuple[str, ...] = (
     "POSTGRES_DB",
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
+    # The ETL's own metadata database (Phase 9): watermarks, run log, DQ results.
+    "ETL_META_HOST",
+    "ETL_META_PORT",
+    "ETL_META_DB",
+    "ETL_META_USER",
+    "ETL_META_PASSWORD",
     "CLICKHOUSE_HOST",
     "CLICKHOUSE_HTTP_PORT",
     "CLICKHOUSE_DB",

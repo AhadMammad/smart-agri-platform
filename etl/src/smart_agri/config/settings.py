@@ -55,6 +55,22 @@ class PostgresSettings(_Base):
         )
 
 
+class EtlMetaSettings(PostgresSettings):
+    """The ETL's own metadata database: watermarks, the run log, DQ results.
+
+    A separate Postgres from the source on purpose. A real source is some
+    application's production database; the platform should only ever read it,
+    never need write access to it, and never put its bookkeeping in its catalog.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="ETL_META_", extra="ignore")
+
+    host: str = "etl-meta-db"
+    db: str = "etl_meta"
+    user: str = "etl"
+    password: SecretStr = SecretStr("etl")
+
+
 class ClickHouseSettings(_Base):
     """Connection details for the analytics warehouse."""
 
@@ -166,6 +182,7 @@ class Settings(_Base):
     log_level: str = Field(default="INFO", alias="SMART_AGRI_LOG_LEVEL")
 
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
+    etl_meta: EtlMetaSettings = Field(default_factory=EtlMetaSettings)
     clickhouse: ClickHouseSettings = Field(default_factory=ClickHouseSettings)
     hdfs: HdfsSettings = Field(default_factory=HdfsSettings)
     hive: HiveSettings = Field(default_factory=HiveSettings)

@@ -54,14 +54,15 @@ the pipelines will actually experience rather than what the host can reach:
 
 ```
 [PASS] postgres         postgres:5432/agri — PostgreSQL 16.14 …
+[PASS] etl-meta-db      etl-meta-db:5432/etl_meta — PostgreSQL 16.14 …
 [PASS] clickhouse       clickhouse:8123/agri_analytics — v24.8.…
 [PASS] hdfs             namenode:9870 — zones: bronze, gold, quarantine, silver
 [PASS] hive-metastore   hive-metastore:9083 — thrift port open
 
-All 4 services healthy.
+All 5 services healthy.
 ```
 
-Anything other than 4/4 means stop and read `make logs SERVICE=<name>` on the
+Anything other than 5/5 means stop and read `make logs SERVICE=<name>` on the
 host — not in an agent session, where a follow-mode log never returns.
 
 If you only need part of the platform, `make up-core`, `make up-orchestration`
@@ -70,7 +71,7 @@ and `make up-bi` bring up subsets.
 ## 3. Schema and data
 
 ```bash
-make migrate           # 24 Liquibase changesets -> Postgres
+make migrate           # etl-meta-db changelog, copy etl_control, then the source changelog
 make init-clickhouse   # 27 tables and 15 views
 make seed              # PROFILE=small|medium|large, default small
 ```

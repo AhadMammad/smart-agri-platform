@@ -26,6 +26,10 @@ PG_HOST         ?= $(call envval,POSTGRES_HOST,postgres)
 PG_DB           ?= $(call envval,POSTGRES_DB,agri)
 PG_USER         ?= $(call envval,POSTGRES_USER,agri)
 PG_PASSWORD     ?= $(call envval,POSTGRES_PASSWORD,agri)
+META_HOST       ?= $(call envval,ETL_META_HOST,etl-meta-db)
+META_DB         ?= $(call envval,ETL_META_DB,etl_meta)
+META_USER       ?= $(call envval,ETL_META_USER,etl)
+META_PASSWORD   ?= $(call envval,ETL_META_PASSWORD,etl)
 
 .PHONY: help
 help: ## Show this help
@@ -141,7 +145,29 @@ doctor: ## Check every backing service from inside a task container
 # Data platform — schema, seed data, pipelines
 # -----------------------------------------------------------------------------
 .PHONY: migrate
-migrate: ## Apply the Liquibase changelogs to Postgres
+migrate: migrate-source ## Apply every Liquibase changelog (etl-meta-db, the copy, then the source)
+
+# The order is load-bearing. The source changelog's 011 drops the old
+# etl_control schema, so it must run after migrate-etl-control has copied that
+# schema's rows into etl-meta-db — and that copy fails loudly if any row is
+# missing, which stops make before the drop. The chain is expressed as
+# prerequisites, so even `make -j` or a bare `make migrate-source` keeps it.
+.PHONY: migrate-meta
+migrate-meta: ## Apply the etl-meta-db changelog (watermarks, run log, DQ results)
+	docker run --rm --network $(NETWORK) \
+	  -v $(ROOT)/liquibase/etl-meta:/liquibase/changelog:ro \
+	  $(LIQUIBASE_IMAGE) \
+	  --changeLogFile=changelog/db.changelog-master.xml \
+	  --url="jdbc:postgresql://$(META_HOST):5432/$(META_DB)" \
+	  --username=$(META_USER) --password=$(META_PASSWORD) \
+	  update
+
+.PHONY: migrate-etl-control
+migrate-etl-control: migrate-meta ## Copy etl_control from the source into etl-meta-db (idempotent)
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) $(ETL_IMAGE) migrate-etl-control
+
+.PHONY: migrate-source
+migrate-source: migrate-etl-control ## Apply the source changelog (runs the copy first)
 	docker run --rm --network $(NETWORK) \
 	  -v $(ROOT)/liquibase/changelog:/liquibase/changelog:ro \
 	  $(LIQUIBASE_IMAGE) \
@@ -151,7 +177,14 @@ migrate: ## Apply the Liquibase changelogs to Postgres
 	  update
 
 .PHONY: migrate-status
-migrate-status: ## Show which changesets are pending
+migrate-status: ## Show which changesets are pending, in both databases
+	docker run --rm --network $(NETWORK) \
+	  -v $(ROOT)/liquibase/etl-meta:/liquibase/changelog:ro \
+	  $(LIQUIBASE_IMAGE) \
+	  --changeLogFile=changelog/db.changelog-master.xml \
+	  --url="jdbc:postgresql://$(META_HOST):5432/$(META_DB)" \
+	  --username=$(META_USER) --password=$(META_PASSWORD) \
+	  status --verbose
 	docker run --rm --network $(NETWORK) \
 	  -v $(ROOT)/liquibase/changelog:/liquibase/changelog:ro \
 	  $(LIQUIBASE_IMAGE) \

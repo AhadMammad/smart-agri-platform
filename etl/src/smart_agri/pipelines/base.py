@@ -68,7 +68,7 @@ class PipelineContext:
     @property
     def control(self) -> ControlStore:
         if self._control is None:
-            self._control = ControlStore(self.settings.postgres)
+            self._control = ControlStore(self.settings.etl_meta)
         return self._control
 
     @property

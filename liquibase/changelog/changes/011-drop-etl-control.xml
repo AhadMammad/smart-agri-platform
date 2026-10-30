@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Phase 9 moved the ETL's bookkeeping into etl-meta-db
+      (liquibase/etl-meta/). The source is now read-only to the ETL.
+
+      `make migrate` runs `smart-agri migrate-etl-control` before this changelog,
+      and that command fails unless every row has landed in etl-meta-db — so this
+      drop never runs ahead of the copy. 001 and 005 still create the schema on a
+      fresh clone, because applied changesets are never edited; this removes it.
+    -->
+    <changeSet id="011-1-drop-etl-control" author="data-platform">
+        <sql>DROP SCHEMA IF EXISTS etl_control CASCADE</sql>
+        <rollback>CREATE SCHEMA IF NOT EXISTS etl_control</rollback>
+    </changeSet>
+
+</databaseChangeLog>

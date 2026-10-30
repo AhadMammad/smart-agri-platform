@@ -9,11 +9,14 @@ import pytest
 import responses
 
 from smart_agri.health import (
+    ALL_CHECKS,
     CheckResult,
     ClickHouseCheck,
+    EtlMetaCheck,
     HdfsCheck,
     HealthCheck,
     HiveMetastoreCheck,
+    PostgresCheck,
     run_health_checks,
 )
 
@@ -49,6 +52,55 @@ class TestHealthCheckBase:
                 return "all good"
 
         assert Fine(settings).run() == CheckResult("fine", healthy=True, detail="all good")
+
+
+class _FakeConnection:
+    def __enter__(self) -> _FakeConnection:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def execute(self, _query: str) -> _FakeConnection:
+        return self
+
+    def fetchone(self) -> tuple[str]:
+        return ("PostgreSQL 16.14 on x86_64-pc-linux-musl, compiled by gcc",)
+
+
+class TestPostgresChecks:
+    @pytest.fixture
+    def connected(self, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        import psycopg
+
+        uris: list[str] = []
+
+        def connect(uri: str, **_: object) -> _FakeConnection:
+            uris.append(uri)
+            return _FakeConnection()
+
+        monkeypatch.setattr(psycopg, "connect", connect)
+        return uris
+
+    def test_source_check_reports_the_server_version(
+        self, settings: Settings, connected: list[str]
+    ) -> None:
+        result = PostgresCheck(settings).run()
+        assert result.healthy is True
+        assert result.detail == "postgres:5432/agri — PostgreSQL 16.14 on x86_64-pc-linux-musl"
+        assert connected == [settings.postgres.uri]
+
+    def test_etl_meta_check_probes_the_metadata_database(
+        self, settings: Settings, connected: list[str]
+    ) -> None:
+        """Probing the source twice would report a missing etl-meta-db as healthy."""
+        result = EtlMetaCheck(settings).run()
+        assert result.service == "etl-meta-db"
+        assert result.detail.startswith("etl-meta-db:5432/etl_meta")
+        assert connected == [settings.etl_meta.uri]
+
+    def test_doctor_checks_both_databases(self) -> None:
+        assert {PostgresCheck, EtlMetaCheck} <= set(ALL_CHECKS)
 
 
 class TestClickHouseCheck:

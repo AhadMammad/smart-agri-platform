@@ -6,10 +6,11 @@ indices and real weather land in a Parquet lake on HDFS, are modelled as a star
 schema in ClickHouse, and are presented through Superset dashboards.
 
 ```
-                    ┌──────────────────┐
-  Synthetic  ─────► │   PostgreSQL     │  OLTP source (Liquibase-managed)
-  generator         │   + etl_control  │  watermarks, run log
-                    └────────┬─────────┘
+                    ┌──────────────────┐     ┌──────────────┐
+  Synthetic  ─────► │   PostgreSQL     │     │ etl-meta-db  │  watermarks, run log,
+  generator         │   OLTP source    │     │  (Postgres)  │  DQ results — written
+                    │   read-only      │     └──────────────┘  by the ETL, never
+                    └────────┬─────────┘                       the source
                              │ full snapshot (dims) / incremental (facts)
                              ▼
   Open-Meteo API ──►  ┌─────────────────────────────────────┐
@@ -64,7 +65,7 @@ working dashboards, with what each step should print.
 `make demo` runs the Phase 2 vertical slice end to end. Individually:
 
 ```bash
-make migrate                     # Liquibase changelogs -> Postgres
+make migrate                     # Liquibase changelogs -> etl-meta-db, then the source
 make init-clickhouse             # ClickHouse tables, views, materialized views
 make seed PROFILE=small          # synthetic farms, fields, sensors, readings
 make run-all                     # Bronze -> Silver -> Gold -> ClickHouse

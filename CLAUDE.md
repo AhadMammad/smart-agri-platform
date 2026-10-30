@@ -86,6 +86,7 @@ scripts/vm.sh status                 # what is running
 scripts/vm.sh sync                   # git pull + rebuild the ETL image
 scripts/vm.sh make doctor            # sync, then run a target
 scripts/vm.sh ch 'SELECT count(*) FROM agg_field_soil_daily'
+scripts/vm.sh meta 'SELECT count(*) FROM etl_control.run_log'
 scripts/vm.sh logs namenode 60
 ```
 

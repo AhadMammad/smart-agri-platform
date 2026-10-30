@@ -61,6 +61,64 @@ class TestDoctor:
         assert captured["timeout_s"] == 2.5
 
 
+class TestMigrateEtlControl:
+    @pytest.fixture
+    def connections(self, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        import psycopg
+
+        uris: list[str] = []
+
+        class Conn:
+            def __enter__(self) -> Conn:
+                return self
+
+            def __exit__(self, *_: object) -> None:
+                return None
+
+        def connect(uri: str, **_: object) -> Conn:
+            uris.append(uri)
+            return Conn()
+
+        monkeypatch.setattr(psycopg, "connect", connect)
+        return uris
+
+    def test_copies_from_the_source_into_etl_meta(
+        self, monkeypatch: pytest.MonkeyPatch, connections: list[str]
+    ) -> None:
+        from smart_agri.config import get_settings
+        from smart_agri.io.control_migration import CopyReport
+
+        seen: list[tuple[object, object]] = []
+
+        def fake_copy(source: object, target: object) -> CopyReport:
+            seen.append((source, target))
+            return CopyReport(copied={"watermark": 3, "run_log": 40})
+
+        monkeypatch.setattr("smart_agri.io.control_migration.copy_control_tables", fake_copy)
+        result = runner.invoke(app, ["migrate-etl-control"])
+
+        assert result.exit_code == 0
+        assert "watermark=3, run_log=40" in result.stdout
+        settings = get_settings()
+        assert connections == [settings.postgres.uri, settings.etl_meta.uri]
+        assert len(seen) == 1
+
+    def test_a_failed_copy_exits_non_zero(
+        self, monkeypatch: pytest.MonkeyPatch, connections: list[str]
+    ) -> None:
+        """Non-zero is what stops `make migrate` before the source drop."""
+        from smart_agri.io.control_migration import ControlCopyError
+
+        def failing_copy(*_: object) -> None:
+            raise ControlCopyError("etl_control.run_log: refusing to continue")
+
+        monkeypatch.setattr("smart_agri.io.control_migration.copy_control_tables", failing_copy)
+        result = runner.invoke(app, ["migrate-etl-control"])
+
+        assert result.exit_code == 1
+        assert len(connections) == 2
+
+
 class TestCallback:
     def test_log_level_override_is_applied(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: list[str] = []

@@ -22,8 +22,9 @@ Rules:
    syncing — `git pull --ff-only` on the VM will not pick them up, and the run
    would silently test stale code.
 
-4. Query the databases with `scripts/vm.sh ch '<sql>'` and
-   `scripts/vm.sh psql '<sql>'`. Read container logs with
+4. Query the databases with `scripts/vm.sh ch '<sql>'` (ClickHouse),
+   `scripts/vm.sh psql '<sql>'` (the source) and `scripts/vm.sh meta '<sql>'`
+   (etl-meta-db: watermarks, run log, DQ results). Read container logs with
    `scripts/vm.sh logs <service> [lines]`. Do not try `make logs`, `make ch`,
    `make psql` or `make clean` on the VM — they block on stdin or never exit,
    and `vm.sh make` refuses them.

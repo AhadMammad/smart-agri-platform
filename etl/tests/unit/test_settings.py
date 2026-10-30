@@ -6,6 +6,7 @@ import pytest
 
 from smart_agri.config import (
     ClickHouseSettings,
+    EtlMetaSettings,
     HdfsSettings,
     LakeZone,
     PostgresSettings,
@@ -36,6 +37,24 @@ class TestPostgresSettings:
         monkeypatch.setenv("POSTGRES_PORT", "6543")
         cfg = PostgresSettings()
         assert (cfg.host, cfg.port) == ("pg.internal", 6543)
+
+
+class TestEtlMetaSettings:
+    def test_defaults_point_at_the_metadata_database_not_the_source(self) -> None:
+        cfg = EtlMetaSettings()
+        assert cfg.uri == "postgresql://etl:etl@etl-meta-db:5432/etl_meta"
+
+    def test_reads_its_own_prefix_and_ignores_the_source_one(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sharing POSTGRES_* would silently put the run log back in the source."""
+        monkeypatch.setenv("POSTGRES_HOST", "source.internal")
+        monkeypatch.setenv("ETL_META_HOST", "meta.internal")
+        assert EtlMetaSettings().host == "meta.internal"
+
+    def test_password_is_not_leaked_by_model_dump(self) -> None:
+        cfg = EtlMetaSettings(password="s3cret")  # type: ignore[arg-type]
+        assert "s3cret" not in str(cfg.model_dump())
 
 
 class TestClickHouseSettings:
@@ -78,6 +97,7 @@ class TestHdfsSettings:
 class TestSettings:
     def test_defaults_compose_every_service_block(self, settings: Settings) -> None:
         assert settings.postgres.host == "postgres"
+        assert settings.etl_meta.host == "etl-meta-db"
         assert settings.clickhouse.host == "clickhouse"
         assert settings.hdfs.namenode_host == "namenode"
         assert settings.hive.port == 9083

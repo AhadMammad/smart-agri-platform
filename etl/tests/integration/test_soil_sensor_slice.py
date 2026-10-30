@@ -55,7 +55,7 @@ def slice_run(context: PipelineContext, seeded: None, settings: Settings) -> Ite
 
     # A prior run's watermark would make Bronze extract nothing and leave the
     # rest of the test asserting against stale data.
-    ControlStore(settings.postgres).reset_watermark("bronze.sensor_reading")
+    ControlStore(settings.etl_meta).reset_watermark("bronze.sensor_reading")
 
     for stage in SOIL_SENSOR_STAGES:
         for name in stage:
@@ -85,7 +85,7 @@ class TestSourceExtraction:
         )
         assert store.read_parquet_dir(path).height > 0
 
-        watermark = ControlStore(settings.postgres).get_watermark("bronze.sensor_reading")
+        watermark = ControlStore(settings.etl_meta).get_watermark("bronze.sensor_reading")
         assert watermark is not None
         assert watermark > datetime(2000, 1, 1, tzinfo=UTC)
 
@@ -217,8 +217,8 @@ class TestRunLog:
         self, slice_run: None, settings: Settings
     ) -> None:
         del slice_run
-        postgres = PostgresSource(settings.postgres)
-        rows = postgres.read_query(
+        etl_meta = PostgresSource(settings.etl_meta)
+        rows = etl_meta.read_query(
             """
             SELECT DISTINCT ON (pipeline) pipeline, status
             FROM etl_control.run_log
@@ -231,3 +231,11 @@ class TestRunLog:
 
         assert expected <= set(recorded)
         assert all(recorded[name] == "success" for name in expected)
+
+    def test_the_source_database_holds_no_etl_bookkeeping(self, settings: Settings) -> None:
+        """The run log lives in etl-meta-db; the source is read-only to the ETL."""
+        rows = PostgresSource(settings.postgres).read_query(
+            "SELECT count(*) AS n FROM information_schema.schemata "
+            "WHERE schema_name = 'etl_control'"
+        )
+        assert rows["n"].to_list() == [0]

@@ -59,6 +59,11 @@ x-airflow-common: &airflow-common
     POSTGRES_DB: ${POSTGRES_DB}
     POSTGRES_USER: ${POSTGRES_USER}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ETL_META_HOST: ${ETL_META_HOST:-etl-meta-db}
+    ETL_META_PORT: ${ETL_META_PORT:-5432}
+    ETL_META_DB: ${ETL_META_DB:-etl_meta}
+    ETL_META_USER: ${ETL_META_USER:-etl}
+    ETL_META_PASSWORD: ${ETL_META_PASSWORD:-etl}
     CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
     CLICKHOUSE_HTTP_PORT: ${CLICKHOUSE_HTTP_PORT}
     CLICKHOUSE_DB: ${CLICKHOUSE_DB}
@@ -213,6 +218,26 @@ services:
         condition: service_healthy
       datanode:
         condition: service_started
+
+  # The ETL's own metadata: watermarks, the run log and data quality results.
+  # Kept apart from `postgres` on purpose — that is the source, and the ETL only
+  # ever reads it. Defaults keep a pre-Phase-9 .env working unchanged.
+  etl-meta-db:
+    image: ${POSTGRES_IMAGE}
+    profiles: [core, orchestration]
+    environment:
+      POSTGRES_DB: ${ETL_META_DB:-etl_meta}
+      POSTGRES_USER: ${ETL_META_USER:-etl}
+      POSTGRES_PASSWORD: ${ETL_META_PASSWORD:-etl}
+    volumes:
+      - etl-meta-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ETL_META_USER:-etl} -d ${ETL_META_DB:-etl_meta}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
 
   metastore-db:
     image: ${POSTGRES_IMAGE}
@@ -492,5 +517,6 @@ volumes:
   hdfs-namenode:
   hdfs-datanode:
   metastore-db-data:
+  etl-meta-db-data:
   airflow-db-data:
   superset-db-data:

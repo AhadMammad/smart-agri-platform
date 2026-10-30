@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from smart_agri.config.settings import (
     ClickHouseSettings,
+    EtlMetaSettings,
     HdfsSettings,
     HiveSettings,
     LakeZone,
@@ -15,6 +16,7 @@ from smart_agri.config.settings import (
 
 __all__ = [
     "ClickHouseSettings",
+    "EtlMetaSettings",
     "HdfsSettings",
     "HiveSettings",
     "LakeZone",

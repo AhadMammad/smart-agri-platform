@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Master changelog for etl-meta-db, the ETL's own metadata database.
+
+  Separate from the source changelog (liquibase/changelog/) because it targets
+  a different database: the source holds business data and is only ever read by
+  the ETL; this one holds what the ETL writes about itself.
+
+  Append-only, like the source changelog: once applied anywhere, never edit a
+  changeset — add a new one.
+-->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- Phase 9: moved out of the source database -->
+    <include file="changes/001-etl-control.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

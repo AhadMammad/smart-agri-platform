@@ -101,6 +101,27 @@ Heavier than LocalExecutor by a Redis instance and a worker container, and
 chosen deliberately: it matches a production topology, so task isolation and
 queue behaviour are exercised during development rather than discovered later.
 
+### The ETL's bookkeeping lives in its own database
+
+Watermarks, the run log and data quality results live in `etl-meta-db`, a
+Postgres of their own, not in the OLTP source. Phases 2–8 kept them in an
+`etl_control` schema inside the source; Phase 9 moved them out.
+
+A real source is some application's production database. The platform should
+only ever *read* it: needing write access to it, adding load to it, or having
+the ETL's tables appear in its catalog are all costs a production team would
+refuse. Keeping the two apart also means the OpenMetadata catalog shows the
+source exactly as the application owns it.
+
+The move is a migration, not a rebuild. `make migrate` applies the etl-meta-db
+changelog, then `smart-agri migrate-etl-control` copies every watermark and
+run-log row across — keeping the later watermark where both exist — and fails
+if any row is missing. Only after that does the source changelog's changeset 011
+drop the old schema; the targets are chained as Make prerequisites so the drop
+can never run first. A fresh clone goes through the same path: 001 and 005
+still create the schema, because applied changesets are never edited, and 011
+removes it.
+
 ### Incremental Bronze appends; it never replaces
 
 The snapshot pipelines clear their partition before writing, because they

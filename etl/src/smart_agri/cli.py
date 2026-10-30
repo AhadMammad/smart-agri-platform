@@ -72,7 +72,7 @@ def doctor(
         typer.Option("--timeout", help="Per-service timeout in seconds."),
     ] = 10.0,
 ) -> None:
-    """Check connectivity to Postgres, ClickHouse, HDFS and the Hive Metastore.
+    """Check connectivity to both Postgres databases, ClickHouse, HDFS and Hive.
 
     Exits non-zero if any service is unreachable, so it doubles as a gate in the
     Makefile and in CI.
@@ -348,3 +348,29 @@ def init_clickhouse(
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(app())
+
+
+@app.command(name="migrate-etl-control")
+def migrate_etl_control() -> None:
+    """Copy watermarks and the run log from the source database to etl-meta-db.
+
+    A one-shot move for deployments that predate etl-meta-db, idempotent and a
+    no-op on a fresh clone. `make migrate` runs it between the two changelogs,
+    so the source's old `etl_control` is only dropped once this has succeeded.
+    """
+    import psycopg
+
+    from smart_agri.io.control_migration import ControlCopyError, copy_control_tables
+
+    settings = get_settings()
+    with (
+        psycopg.connect(settings.postgres.uri) as source,
+        psycopg.connect(settings.etl_meta.uri) as target,
+    ):
+        try:
+            report = copy_control_tables(source, target)
+        except ControlCopyError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from None
+
+    typer.echo(f"etl_control copy: {report.summary()}")

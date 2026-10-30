@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import requests
 
-from smart_agri.config import Settings, get_settings
+from smart_agri.config import PostgresSettings, Settings, get_settings
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
@@ -71,14 +71,26 @@ class PostgresCheck(HealthCheck):
 
     service = "postgres"
 
+    def _config(self) -> PostgresSettings:
+        return self._settings.postgres
+
     def _probe(self) -> str:
         import psycopg
 
-        cfg = self._settings.postgres
+        cfg = self._config()
         with psycopg.connect(cfg.uri, connect_timeout=int(self._timeout_s)) as conn:
             row = conn.execute("SELECT version()").fetchone()
         version = str(row[0]).split(",")[0] if row else "unknown"
         return f"{cfg.host}:{cfg.port}/{cfg.db} — {version}"
+
+
+class EtlMetaCheck(PostgresCheck):
+    """The ETL's metadata database: watermarks, run log, DQ results."""
+
+    service = "etl-meta-db"
+
+    def _config(self) -> PostgresSettings:
+        return self._settings.etl_meta
 
 
 class ClickHouseCheck(HealthCheck):
@@ -137,6 +149,7 @@ class HiveMetastoreCheck(HealthCheck):
 
 ALL_CHECKS: tuple[type[HealthCheck], ...] = (
     PostgresCheck,
+    EtlMetaCheck,
     ClickHouseCheck,
     HdfsCheck,
     HiveMetastoreCheck,
