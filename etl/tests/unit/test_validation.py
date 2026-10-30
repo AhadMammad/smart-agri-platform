@@ -15,7 +15,14 @@ import polars as pl
 import pytest
 from pandera.engines import polars_engine
 
-from smart_agri.contracts import validate
+from smart_agri.contracts import (
+    SILVER_DIM_PLANTING,
+    SILVER_FACT_MACHINE_FAULT,
+    SILVER_FACT_MACHINE_OPERATION,
+    row_rule,
+    validate,
+)
+from smart_agri.contracts.validation import ROW_RULE_COLUMN
 
 SCHEMA = pa.DataFrameSchema(
     {
@@ -126,3 +133,69 @@ class TestEmptyInput:
         assert result.rows_in == 0
         assert result.rejection_rate == 0.0
         assert result.valid.columns == empty.columns
+
+
+TIMED = pa.DataFrameSchema(
+    {
+        "id": pa.Column(polars_engine.Int64, unique=True),
+        "started": pa.Column(polars_engine.Int64),
+        "finished": pa.Column(polars_engine.Int64, nullable=True),
+    },
+    checks=[row_rule("finished_after_started", pl.col("finished") >= pl.col("started"))],
+    strict=True,
+    name="timed",
+)
+
+
+class TestRowRules:
+    def test_only_the_row_breaking_the_rule_is_quarantined(self) -> None:
+        frame = pl.DataFrame({"id": [1, 2, 3], "started": [1, 5, 2], "finished": [2, 4, 2]})
+
+        result = validate(frame, TIMED)
+
+        assert result.invalid["id"].to_list() == [2]
+        assert result.valid["id"].to_list() == [1, 3]
+
+    def test_failures_are_reported_against_the_row_not_the_schema(self) -> None:
+        """pandera names the schema as the failing 'column'; the report must not."""
+        frame = pl.DataFrame({"id": [1, 2], "started": [5, 5], "finished": [4, 3]})
+
+        summary = validate(frame, TIMED).failure_summary.to_dicts()
+
+        assert summary == [
+            {"column": ROW_RULE_COLUMN, "check": "finished_after_started", "failed_rows": 2}
+        ]
+
+    def test_a_null_comparison_passes(self) -> None:
+        """An open interval is the nullable column's business, not the rule's."""
+        frame = pl.DataFrame(
+            {"id": [1], "started": [5], "finished": [None]},
+            schema={"id": pl.Int64, "started": pl.Int64, "finished": pl.Int64},
+        )
+        assert validate(frame, TIMED).rows_invalid == 0
+
+    def test_a_row_rule_and_a_column_check_on_one_row_quarantine_it_once(self) -> None:
+        frame = pl.DataFrame({"id": [1, 1, 3], "started": [5, 1, 1], "finished": [4, 2, 2]})
+
+        result = validate(frame, TIMED)
+
+        assert sorted(result.invalid["id"].to_list()) == [1, 1]
+        assert set(result.failure_summary["check"].to_list()) == {
+            "finished_after_started",
+            "field_uniqueness",
+        }
+
+
+class TestSilverRowRules:
+    """The rules guard real contracts; dropping one would be silent otherwise."""
+
+    @pytest.mark.parametrize(
+        ("schema", "rule"),
+        [
+            (SILVER_FACT_MACHINE_OPERATION, "finished_after_started"),
+            (SILVER_DIM_PLANTING, "harvest_after_planting"),
+            (SILVER_FACT_MACHINE_FAULT, "resolved_after_occurred"),
+        ],
+    )
+    def test_the_contract_carries_its_row_rule(self, schema: pa.DataFrameSchema, rule: str) -> None:
+        assert rule in {check.name for check in schema.checks}

@@ -35,6 +35,26 @@ def utc_datetime() -> Any:
     return cast("Any", polars_engine.DateTime(time_zone="UTC"))
 
 
+def row_rule(name: str, rule: pl.Expr) -> pa.Check:
+    """A rule across several columns of one row, quarantining only the rows that break it.
+
+    Evaluated as a dataframe-level pandera check, which reports each failing row
+    by index — so `validate()` quarantines those rows and nothing else, exactly
+    as it does for a single-column range check.
+
+    A null comparison passes: whether a column may be null is that column's
+    rule, and a rule here should not reject a row its column contract accepts.
+
+    No `error=` message: pandera would report it in place of `name`, and the
+    name is the stable identifier a check result is recorded and tracked under.
+    """
+
+    def _check(data: Any) -> pl.LazyFrame:
+        return cast("pl.LazyFrame", data.lazyframe.select(rule.fill_null(value=True)))
+
+    return pa.Check(_check, name=name)
+
+
 # --- Bronze ------------------------------------------------------------------
 # Only presence and coarse type. `strict=False` so an added source column lands
 # in Bronze rather than failing the extract.
@@ -578,6 +598,9 @@ SILVER_DIM_PLANTING = pa.DataFrameSchema(
         ),
     },
     strict=True,
+    checks=[
+        row_rule("harvest_after_planting", pl.col("expected_harvest_on") > pl.col("planted_on"))
+    ],
     name="silver_dim_planting",
 )
 
@@ -712,6 +735,7 @@ SILVER_FACT_MACHINE_OPERATION = pa.DataFrameSchema(
         "operator_name": pa.Column(polars_engine.String, nullable=True),
     },
     strict=True,
+    checks=[row_rule("finished_after_started", pl.col("finished_at") >= pl.col("started_at"))],
     name="silver_fact_machine_operation",
 )
 
@@ -762,6 +786,7 @@ SILVER_FACT_MACHINE_FAULT = pa.DataFrameSchema(
         "repair_cost_usd": _money(),
     },
     strict=True,
+    checks=[row_rule("resolved_after_occurred", pl.col("resolved_at") >= pl.col("occurred_at"))],
     name="silver_fact_machine_fault",
 )
 

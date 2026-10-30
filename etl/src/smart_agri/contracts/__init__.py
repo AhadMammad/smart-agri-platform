@@ -50,6 +50,7 @@ from smart_agri.contracts.schemas import (
     SILVER_FACT_WEATHER_DAILY,
     SILVER_SCHEMAS,
     empty_frame_for,
+    row_rule,
     utc_datetime,
 )
 from smart_agri.contracts.validation import ValidationResult, validate
@@ -103,6 +104,7 @@ __all__ = [
     "SILVER_SCHEMAS",
     "ValidationResult",
     "empty_frame_for",
+    "row_rule",
     "utc_datetime",
     "validate",
 ]

@@ -134,11 +134,23 @@ def _structural_checks(failures: pl.DataFrame) -> list[str]:
     return sorted({f"{row['column']}: {row['check']}" for row in structural.iter_rows(named=True)})
 
 
+#: The `column` a row rule's failures are reported under. pandera puts the
+#: schema's name there, which reads as if a column of that name had failed.
+ROW_RULE_COLUMN = "<row>"
+
+
 def _summarise(failures: pl.DataFrame) -> pl.DataFrame:
     """Count failures per column and check."""
     columns = [c for c in ("column", "check") if c in failures.columns]
     if not columns:
         return _empty_summary()
+    if "schema_context" in failures.columns and "column" in columns:
+        failures = failures.with_columns(
+            pl.when(pl.col("schema_context") == "DataFrameSchema")
+            .then(pl.lit(ROW_RULE_COLUMN))
+            .otherwise(pl.col("column"))
+            .alias("column")
+        )
     return (
         failures.group_by(columns)
         .agg(pl.len().alias("failed_rows"))
