@@ -147,6 +147,14 @@ doctor: ## Check every backing service from inside a task container
 .PHONY: migrate
 migrate: migrate-source ## Apply every Liquibase changelog (etl-meta-db, the copy, then the source)
 
+# Pin Liquibase's tracking tables, and the default schema, to `public`. Left to
+# the connection, Liquibase follows search_path `"$user", public` — and the
+# source's user is `agri`. A fresh install records every changeset in
+# public.databasechangelog (schema agri does not exist yet); the next run then
+# finds schema agri, starts an empty agri.databasechangelog beside it, and
+# re-runs every changeset from 001, failing on the first CREATE TABLE.
+LIQUIBASE_SCHEMA_ARGS := --liquibase-schema-name=public --default-schema-name=public
+
 # The order is load-bearing. The source changelog's 011 drops the old
 # etl_control schema, so it must run after migrate-etl-control has copied that
 # schema's rows into etl-meta-db — and that copy fails loudly if any row is
@@ -160,6 +168,7 @@ migrate-meta: ## Apply the etl-meta-db changelog (watermarks, run log, DQ result
 	  --changeLogFile=changelog/db.changelog-master.xml \
 	  --url="jdbc:postgresql://$(META_HOST):5432/$(META_DB)" \
 	  --username=$(META_USER) --password=$(META_PASSWORD) \
+	  $(LIQUIBASE_SCHEMA_ARGS) \
 	  update
 
 .PHONY: migrate-etl-control
@@ -174,6 +183,7 @@ migrate-source: migrate-etl-control ## Apply the source changelog (runs the copy
 	  --changeLogFile=changelog/db.changelog-master.xml \
 	  --url="jdbc:postgresql://$(PG_HOST):5432/$(PG_DB)" \
 	  --username=$(PG_USER) --password=$(PG_PASSWORD) \
+	  $(LIQUIBASE_SCHEMA_ARGS) \
 	  update
 
 .PHONY: migrate-status
@@ -184,6 +194,7 @@ migrate-status: ## Show which changesets are pending, in both databases
 	  --changeLogFile=changelog/db.changelog-master.xml \
 	  --url="jdbc:postgresql://$(META_HOST):5432/$(META_DB)" \
 	  --username=$(META_USER) --password=$(META_PASSWORD) \
+	  $(LIQUIBASE_SCHEMA_ARGS) \
 	  status --verbose
 	docker run --rm --network $(NETWORK) \
 	  -v $(ROOT)/liquibase/changelog:/liquibase/changelog:ro \
@@ -191,6 +202,7 @@ migrate-status: ## Show which changesets are pending, in both databases
 	  --changeLogFile=changelog/db.changelog-master.xml \
 	  --url="jdbc:postgresql://$(PG_HOST):5432/$(PG_DB)" \
 	  --username=$(PG_USER) --password=$(PG_PASSWORD) \
+	  $(LIQUIBASE_SCHEMA_ARGS) \
 	  status --verbose
 
 .PHONY: init-clickhouse
