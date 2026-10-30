@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      One row per check, per run: schema rules, join and filter drops, volume,
+      reconciliation and freshness all share this shape, so one table feeds the
+      Superset dashboard and the OpenMetadata push.
+
+      run_id is NOT NULL even for checks that run outside a pipeline: each DQ
+      suite opens its own run_log row (pipeline = 'dq.<suite>'). `pipeline` here
+      names the run that produced the result; `dataset` and `target` name what
+      was checked. The CHECK lists mirror the enums in smart_agri.quality.
+    -->
+    <changeSet id="002-1-dq-check-result" author="data-platform">
+        <createTable tableName="dq_check_result" schemaName="etl_control"
+                     remarks="One data quality check evaluated in one run">
+            <column name="result_id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_dq_check_result"/>
+            </column>
+            <column name="run_id" type="UUID">
+                <constraints nullable="false"
+                             foreignKeyName="fk_dq_check_result_run"
+                             referencedTableSchemaName="etl_control"
+                             referencedTableName="run_log"
+                             referencedColumnNames="run_id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="pipeline" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logical_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="check_name" type="VARCHAR(160)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="check_type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset" type="VARCHAR(100)"/>
+            <column name="target" type="VARCHAR(200)"/>
+            <column name="severity" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="outcome" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="observed_value" type="DOUBLE PRECISION"/>
+            <column name="threshold" type="DOUBLE PRECISION"/>
+            <column name="rows_evaluated" type="BIGINT"/>
+            <column name="rows_failed" type="BIGINT"/>
+            <column name="details" type="JSONB" defaultValueComputed="'{}'::jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="checked_at" type="TIMESTAMPTZ" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            ALTER TABLE etl_control.dq_check_result ADD CONSTRAINT ck_dq_check_type
+                CHECK (check_type IN ('schema', 'rejection_rate', 'join', 'filter', 'dedupe',
+                                      'volume', 'reconciliation', 'freshness'));
+            ALTER TABLE etl_control.dq_check_result ADD CONSTRAINT ck_dq_severity
+                CHECK (severity IN ('error', 'warn'));
+            ALTER TABLE etl_control.dq_check_result ADD CONSTRAINT ck_dq_outcome
+                CHECK (outcome IN ('passed', 'warned', 'failed', 'skipped'));
+            CREATE INDEX ix_dq_check_result_run ON etl_control.dq_check_result (run_id);
+            CREATE INDEX ix_dq_check_result_pipeline_date
+                ON etl_control.dq_check_result (pipeline, logical_date DESC);
+            CREATE INDEX ix_dq_check_result_outcome
+                ON etl_control.dq_check_result (outcome, checked_at DESC);
+        </sql>
+
+        <rollback>
+            <dropTable tableName="dq_check_result" schemaName="etl_control"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

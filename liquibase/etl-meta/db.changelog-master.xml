@@ -17,5 +17,6 @@
 
     <!-- Phase 9: moved out of the source database -->
     <include file="changes/001-etl-control.xml" relativeToChangelogFile="true"/>
+    <include file="changes/002-data-quality.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

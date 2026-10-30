@@ -18,13 +18,14 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from smart_agri.config import HdfsSettings
-from smart_agri.io.control import RunStats, RunStatus
+from smart_agri.io.control import DQ_RESULT_COLUMNS, RunRecord, RunStats, RunStatus, dq_result_row
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from datetime import date, datetime
 
     from smart_agri.config import LakeZone
+    from smart_agri.quality import CheckResult
 
 
 class FakeHdfsStore:
@@ -175,11 +176,17 @@ class FakePostgresSource:
 
 
 class FakeControlStore:
-    """Watermarks and run log held in memory."""
+    """Watermarks, run log and data quality results held in memory.
+
+    Results are stored as the rows `ControlStore.record_checks` would insert,
+    built by the same function, so a field the real insert would reject fails
+    here too.
+    """
 
     def __init__(self) -> None:
         self.watermarks: dict[str, datetime | None] = {}
         self.runs: list[dict[str, Any]] = []
+        self.checks: list[dict[str, Any]] = []
 
     def get_watermark(self, pipeline: str) -> datetime | None:
         return self.watermarks.get(pipeline)
@@ -226,6 +233,39 @@ class FakeControlStore:
     @property
     def last_run(self) -> dict[str, Any]:
         return self.runs[-1]
+
+    def recent_runs(self, pipeline: str, limit: int = 14) -> list[RunRecord]:
+        finished = [
+            run
+            for run in reversed(self.runs)
+            if run["pipeline"] == pipeline and run["status"] is RunStatus.SUCCESS
+        ]
+        return [
+            RunRecord(
+                run["logical_date"],
+                run["stats"].rows_read,
+                run["stats"].rows_written,
+                run["stats"].rows_quarantined,
+            )
+            for run in finished[:limit]
+        ]
+
+    def record_checks(
+        self,
+        run_id: uuid.UUID,
+        pipeline: str,
+        logical_date: date,
+        results: Sequence[CheckResult],
+    ) -> None:
+        if not any(run["run_id"] == run_id for run in self.runs):
+            msg = f"unknown run_id {run_id} — the foreign key would reject it"
+            raise KeyError(msg)
+        for result in results:
+            row = dq_result_row(run_id, pipeline, logical_date, result)
+            self.checks.append(dict(zip(DQ_RESULT_COLUMNS, row, strict=True)))
+
+    def checks_named(self, check_name: str) -> list[dict[str, Any]]:
+        return [c for c in self.checks if c["check_name"] == check_name]
 
 
 class FakeClickHouseSink:

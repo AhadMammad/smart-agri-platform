@@ -1,25 +1,30 @@
-"""Pipeline bookkeeping: watermarks and the run log.
+"""Pipeline bookkeeping: watermarks, the run log and data quality results.
 
-State lives in `etl_control` in Postgres rather than in Airflow Variables, so it
+State lives in `etl_control` in etl-meta-db rather than in Airflow Variables, so it
 is queryable by anyone, survives an Airflow reset, and — the reason that matters
 most here — can be tested without an Airflow instance.
 """
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import partial
 from typing import TYPE_CHECKING
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import date, datetime
 
     from smart_agri.config import PostgresSettings
+    from smart_agri.quality import CheckResult
 
 logger = get_logger(__name__)
 
@@ -39,6 +44,61 @@ class RunStats:
     rows_read: int = 0
     rows_written: int = 0
     rows_quarantined: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RunRecord:
+    """A finished run, as the volume check reads its history."""
+
+    logical_date: date
+    rows_read: int
+    rows_written: int
+    rows_quarantined: int
+
+
+#: Columns `record_checks` writes, in order. `result_id` and `checked_at` take
+#: their database defaults. `test_control.py` diffs this against the changelog.
+DQ_RESULT_COLUMNS: tuple[str, ...] = (
+    "run_id",
+    "pipeline",
+    "logical_date",
+    "check_name",
+    "check_type",
+    "dataset",
+    "target",
+    "severity",
+    "outcome",
+    "observed_value",
+    "threshold",
+    "rows_evaluated",
+    "rows_failed",
+    "details",
+)
+
+# Check details are free-form; a date or Decimal in them must not fail the run.
+_dumps = partial(json.dumps, default=str, sort_keys=True)
+
+
+def dq_result_row(
+    run_id: uuid.UUID, pipeline: str, logical_date: date, result: CheckResult
+) -> tuple[object, ...]:
+    """One `dq_check_result` row, in `DQ_RESULT_COLUMNS` order."""
+    return (
+        run_id,
+        pipeline,
+        logical_date,
+        result.check_name,
+        result.check_type.value,
+        result.dataset,
+        result.target,
+        result.severity.value,
+        result.outcome.value,
+        result.observed_value,
+        result.threshold,
+        result.rows_evaluated,
+        result.rows_failed,
+        Jsonb(dict(result.details), dumps=_dumps),
+    )
 
 
 class ControlStore:
@@ -147,4 +207,41 @@ class ControlStore:
                     run_id,
                 ),
             )
+            conn.commit()
+
+    def recent_runs(self, pipeline: str, limit: int = 14) -> list[RunRecord]:
+        """The latest successful runs of a pipeline, newest first."""
+        with psycopg.connect(self._settings.uri) as conn:
+            rows = conn.execute(
+                """
+                SELECT logical_date, rows_read, rows_written, rows_quarantined
+                  FROM etl_control.run_log
+                 WHERE pipeline = %s AND status = %s
+                 ORDER BY started_at DESC
+                 LIMIT %s
+                """,
+                (pipeline, RunStatus.SUCCESS.value, limit),
+            ).fetchall()
+        return [RunRecord(*row) for row in rows]
+
+    # -- data quality ----------------------------------------------------------
+    def record_checks(
+        self,
+        run_id: uuid.UUID,
+        pipeline: str,
+        logical_date: date,
+        results: Sequence[CheckResult],
+    ) -> None:
+        """Persist every check result of one run, in one transaction."""
+        if not results:
+            return
+        placeholders = ", ".join(["%s"] * len(DQ_RESULT_COLUMNS))
+        query = (
+            f"INSERT INTO etl_control.dq_check_result ({', '.join(DQ_RESULT_COLUMNS)}) "
+            f"VALUES ({placeholders})"
+        )
+        rows = [dq_result_row(run_id, pipeline, logical_date, r) for r in results]
+        with psycopg.connect(self._settings.uri) as conn:
+            with conn.cursor() as cursor:
+                cursor.executemany(query, rows)
             conn.commit()
