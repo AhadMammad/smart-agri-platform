@@ -404,3 +404,42 @@ def migrate_etl_control() -> None:
             raise typer.Exit(code=1) from None
 
     typer.echo(f"etl_control copy: {report.summary()}")
+
+
+dq_app = typer.Typer(
+    help="Data quality suites that run outside the pipelines.",
+    no_args_is_help=True,
+)
+app.add_typer(dq_app, name="dq")
+
+
+@dq_app.command(name="list")
+def dq_list() -> None:
+    """List the data quality suites."""
+    from smart_agri.quality.suites import dq_suites
+
+    for name in sorted(dq_suites()):
+        typer.echo(name)
+
+
+@dq_app.command(name="run")
+def dq_run(
+    suite: Annotated[str, typer.Argument(help="Suite name, e.g. freshness.")],
+    logical_date: _DateOption = None,
+) -> None:
+    """Run one suite, record its results, and exit 3 if an error check failed."""
+    from smart_agri.pipelines import PipelineContext
+    from smart_agri.quality.suites import run_suite, summarise
+
+    target = _resolve_date(logical_date)
+    try:
+        with _data_quality_exit():
+            results = run_suite(suite, target, PipelineContext())
+    except KeyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from None
+
+    for result in results:
+        if result.outcome.value != "passed":
+            typer.echo(f"  {result}")
+    typer.echo(f"dq.{suite}: {summarise(results)}")

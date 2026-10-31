@@ -224,6 +224,22 @@ class ControlStore:
             ).fetchall()
         return [RunRecord(*row) for row in rows]
 
+    def last_success(self, pipelines: Sequence[str]) -> dict[str, datetime]:
+        """When each pipeline last finished successfully. Absent if it never has."""
+        if not pipelines:
+            return {}
+        with psycopg.connect(self._settings.uri) as conn:
+            rows = conn.execute(
+                """
+                SELECT pipeline, max(finished_at)
+                  FROM etl_control.run_log
+                 WHERE status = %s AND pipeline = ANY(%s)
+                 GROUP BY pipeline
+                """,
+                (RunStatus.SUCCESS.value, list(pipelines)),
+            ).fetchall()
+        return {pipeline: finished for pipeline, finished in rows if finished is not None}
+
     # -- data quality ----------------------------------------------------------
     def record_checks(
         self,

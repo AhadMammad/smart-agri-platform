@@ -13,6 +13,8 @@ expectation drifted.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC as _UTC
+from datetime import datetime as _datetime
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -105,6 +107,15 @@ class FakePostgresSource:
         msg = f"no fake table matches query: {sql}"
         raise KeyError(msg)
 
+    def count(self, table: str, *, column: str | None = None, at_most: object | None = None) -> int:
+        frame = self.tables.get(table)
+        if frame is None:
+            msg = f'relation "{table}" does not exist'
+            raise KeyError(msg)
+        if column is None or at_most is None:
+            return frame.height
+        return frame.filter(pl.col(column) <= at_most).height
+
     @staticmethod
     def _apply_watermark(
         frame: pl.DataFrame, sql: str, params: Sequence[Any] | None
@@ -187,6 +198,8 @@ class FakeControlStore:
         self.watermarks: dict[str, datetime | None] = {}
         self.runs: list[dict[str, Any]] = []
         self.checks: list[dict[str, Any]] = []
+        #: What `finish_run` stamps as `finished_at`; a test can move it.
+        self.now: datetime = _datetime.now(_UTC)
 
     def get_watermark(self, pipeline: str) -> datetime | None:
         return self.watermarks.get(pipeline)
@@ -225,7 +238,9 @@ class FakeControlStore:
     ) -> None:
         for run in self.runs:
             if run["run_id"] == run_id:
-                run.update(status=status, stats=stats or RunStats(), error=error)
+                run.update(
+                    status=status, stats=stats or RunStats(), error=error, finished_at=self.now
+                )
                 return
         msg = f"unknown run_id {run_id}"
         raise KeyError(msg)
@@ -233,6 +248,15 @@ class FakeControlStore:
     @property
     def last_run(self) -> dict[str, Any]:
         return self.runs[-1]
+
+    def last_success(self, pipelines: Sequence[str]) -> dict[str, datetime]:
+        latest: dict[str, datetime] = {}
+        for run in self.runs:
+            if run["pipeline"] in pipelines and run["status"] is RunStatus.SUCCESS:
+                previous = latest.get(run["pipeline"])
+                if previous is None or run["finished_at"] > previous:
+                    latest[run["pipeline"]] = run["finished_at"]
+        return latest
 
     def recent_runs(self, pipeline: str, limit: int = 14) -> list[RunRecord]:
         finished = [

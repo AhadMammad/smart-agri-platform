@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -26,6 +27,18 @@ if TYPE_CHECKING:
     from smart_agri.config import PostgresSettings
 
 logger = get_logger(__name__)
+
+#: A bare or schema-qualified identifier. Interpolated names are checked against
+#: this, because a table or column cannot be bound as a query parameter.
+_QUALIFIED_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
+
+
+def _check_qualified_identifier(name: str) -> str:
+    if not _QUALIFIED_IDENTIFIER.match(name):
+        msg = f"invalid identifier: {name!r}"
+        raise ValueError(msg)
+    return name
+
 
 #: Postgres types the driver hands back wrapped in an Arrow extension, mapped to
 #: the Arrow type the rest of the platform expects.
@@ -117,6 +130,21 @@ class PostgresSource:
         with psycopg.connect(self._settings.uri) as conn:
             row = conn.execute(sql, params).fetchone()
         return row[0] if row else None
+
+    def count(self, table: str, *, column: str | None = None, at_most: object | None = None) -> int:
+        """Rows in `table`, or only those with `column <= at_most`.
+
+        The bound is what makes a source count comparable with the warehouse:
+        rows written after the last extract's watermark are not missing, they
+        simply have not been extracted yet.
+        """
+        _check_qualified_identifier(table)
+        if column is None or at_most is None:
+            return int(self.scalar(f"SELECT count(*) FROM {table}") or 0)
+        _check_qualified_identifier(column)
+        return int(
+            self.scalar(f"SELECT count(*) FROM {table} WHERE {column} <= %s", [at_most]) or 0
+        )
 
     # -- writes --------------------------------------------------------------
     def execute(self, sql: str, params: Sequence[Any] | None = None) -> None:

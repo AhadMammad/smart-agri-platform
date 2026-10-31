@@ -13,9 +13,10 @@ import fsspec
 import polars as pl
 import pytest
 
-from smart_agri.config import ClickHouseSettings, HdfsSettings, LakeZone
+from smart_agri.config import ClickHouseSettings, HdfsSettings, LakeZone, PostgresSettings
 from smart_agri.io.clickhouse import ClickHouseSink, _check_identifier
 from smart_agri.io.hdfs import HdfsStore
+from smart_agri.io.postgres import PostgresSource
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -288,3 +289,40 @@ class TestClickHouseLifecycle:
 
     def test_client_is_not_opened_on_construction(self) -> None:
         assert ClickHouseSink(ClickHouseSettings())._client is None
+
+
+class TestPostgresCount:
+    @pytest.fixture
+    def source(self, monkeypatch: pytest.MonkeyPatch) -> tuple[PostgresSource, list[Any]]:
+        calls: list[Any] = []
+        instance = PostgresSource(PostgresSettings())
+
+        def scalar(sql: str, params: Any = None) -> int:
+            calls.append((sql, params))
+            return 42
+
+        monkeypatch.setattr(instance, "scalar", scalar)
+        return instance, calls
+
+    def test_an_unbounded_count_reads_the_whole_table(
+        self, source: tuple[PostgresSource, list[Any]]
+    ) -> None:
+        instance, calls = source
+        assert instance.count("agri.farm") == 42
+        assert calls == [("SELECT count(*) FROM agri.farm", None)]
+
+    def test_a_bounded_count_binds_the_bound(
+        self, source: tuple[PostgresSource, list[Any]]
+    ) -> None:
+        instance, calls = source
+        instance.count("agri.harvest", column="updated_at", at_most="2026-08-01")
+        assert calls == [
+            ("SELECT count(*) FROM agri.harvest WHERE updated_at <= %s", ["2026-08-01"])
+        ]
+
+    @pytest.mark.parametrize("name", ["agri.farm; DROP TABLE x", "a.b.c", "", "1farm"])
+    def test_an_unsafe_name_is_refused(
+        self, source: tuple[PostgresSource, list[Any]], name: str
+    ) -> None:
+        with pytest.raises(ValueError, match="invalid identifier"):
+            source[0].count(name)

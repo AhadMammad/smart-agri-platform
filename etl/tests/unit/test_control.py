@@ -13,7 +13,7 @@ import json
 import re
 import uuid
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -207,3 +207,25 @@ class TestRecentRuns:
         assert "status = %s" in query
         assert "ORDER BY started_at DESC" in query
         assert params == ("silver.fact_irrigation", "success", 5)
+
+
+class TestLastSuccess:
+    def test_maps_each_pipeline_to_its_latest_successful_finish(
+        self, store: ControlStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        finished = datetime(2026, 8, 1, 7, tzinfo=UTC)
+        conn = _RecordingConnection(rows=[("load.fact_harvest", finished), ("load.x", None)])
+        _connect(monkeypatch, conn)
+
+        latest = store.last_success(["load.fact_harvest", "load.x"])
+
+        assert latest == {"load.fact_harvest": finished}
+        query, params = conn.executed[0]
+        assert "pipeline = ANY(%s)" in query
+        assert params == ("success", ["load.fact_harvest", "load.x"])
+
+    def test_no_pipelines_opens_no_connection(
+        self, store: ControlStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert _connect(monkeypatch, _RecordingConnection()) == []
+        assert store.last_success([]) == {}
