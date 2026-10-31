@@ -42,6 +42,7 @@ class Guarded(BasePipeline):
     dataset = "guarded"
     schema = SCHEMA
     max_rejection_rate = 0.5
+    volume_rule = None  # tested on its own below
     rows: ClassVar[list[int]] = [1, 2, 999]
     loaded: ClassVar[list[pl.DataFrame]] = []
 
@@ -300,6 +301,7 @@ class Loader(BasePipeline):
     name = "load.widget"
     dataset = "widget"
     warehouse_table = "fact_widget"
+    volume_rule = None
     frame: ClassVar[pl.DataFrame] = pl.DataFrame({"widget_id": [1, 2, 3]})
 
     def extract(self, run: RunContext) -> pl.DataFrame:

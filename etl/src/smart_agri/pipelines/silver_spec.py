@@ -141,6 +141,10 @@ class SilverPipeline(BasePipeline):
         self.name = f"silver.{spec.dataset}"
         self.dataset = spec.dataset
         self.schema = spec.schema
+        if spec.incremental:
+            # Conforms one day's ingest batch, which is as variable as the
+            # Bronze extract it reads.
+            self.volume_rule = None
         super().__init__(context)
 
     # -- extract -------------------------------------------------------------

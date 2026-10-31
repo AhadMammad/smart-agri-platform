@@ -23,11 +23,14 @@ from smart_agri.contracts import ValidationResult, validate
 from smart_agri.io import ClickHouseSink, ControlStore, HdfsStore, PostgresSource, RunStats
 from smart_agri.io.control import RunStatus
 from smart_agri.quality import (
+    DEFAULT_VOLUME_RULE,
     CheckCollector,
     CheckResult,
     CheckType,
     Outcome,
     Severity,
+    VolumeRule,
+    evaluate_volume,
     outcome_for,
 )
 from smart_agri.utils import get_logger
@@ -126,6 +129,11 @@ class BasePipeline(ABC):
     #: the post-load reconciliation.
     warehouse_table: str | None = None
 
+    #: The band this run's row count must fall in, relative to recent runs.
+    #: `None` for a pipeline whose batches legitimately vary — an incremental
+    #: extract is empty whenever the source is quiet.
+    volume_rule: VolumeRule | None = DEFAULT_VOLUME_RULE
+
     def __init__(self, context: PipelineContext | None = None) -> None:
         self.context = context or PipelineContext()
         #: Results of the current run. Replaced at the start of each `run`; built
@@ -192,9 +200,24 @@ class BasePipeline(ABC):
         return stats
 
     # -- data quality hooks ----------------------------------------------------
-    # Optional, like `transform`: most pipelines add nothing here.
-    def _pre_load_checks(self, frame: pl.DataFrame, run: RunContext) -> None:  # noqa: B027
-        """Checks on the validated frame. An error here means nothing is written."""
+    def _pre_load_checks(self, frame: pl.DataFrame, run: RunContext) -> None:  # noqa: ARG002
+        """Checks on the validated frame. An error here means nothing is written.
+
+        Compares the row count with recent runs, when the pipeline has a rule.
+        Before the load on purpose: a broken extract must not overwrite the lake.
+        """
+        rule = self.volume_rule
+        if rule is None:
+            return
+        history = self.context.control.recent_runs(self.name, limit=rule.history)
+        self.checks.record(
+            evaluate_volume(
+                rule,
+                frame.height,
+                [past.rows_written for past in history],
+                dataset=self.dataset,
+            )
+        )
 
     def _post_load_checks(self, written: int, run: RunContext) -> None:  # noqa: ARG002
         """Checks on what `load` wrote. An error here stops downstream stages.

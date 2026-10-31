@@ -105,6 +105,10 @@ class BronzeSnapshotPipeline(BasePipeline):
 class BronzeIncrementalPipeline(BasePipeline):
     """Watermark-driven extract of a fact table into Bronze."""
 
+    #: A watermark batch is empty whenever the source is quiet; its size says
+    #: nothing about health. Volume is judged downstream, on the full fact load.
+    volume_rule = None
+
     def __init__(self, spec: IncrementalSpec, context: PipelineContext | None = None) -> None:
         self.spec = spec
         self.name = f"bronze.{spec.dataset}"
