@@ -124,6 +124,20 @@ class TestEveryLoadedTableIsDeclared:
         missing = [spec.table for spec in GOLD_LOAD_SPECS if spec.table not in declared]
         assert not missing, f"gold tables with no DDL: {missing}"
 
+    def test_every_load_pipeline_reconciles_a_declared_table(
+        self, declared: dict[str, list[str]]
+    ) -> None:
+        """A load without `warehouse_table` skips the post-load reconciliation
+        silently — including the weather loads, which are not spec-driven."""
+        from smart_agri.pipelines import get_pipeline, pipeline_names
+
+        loads = [get_pipeline(name) for name in pipeline_names() if name.startswith("load.")]
+        unreconciled = [p.name for p in loads if p.warehouse_table is None]
+        undeclared = [p.warehouse_table for p in loads if p.warehouse_table not in declared]
+        assert loads
+        assert not unreconciled, f"loads with no warehouse_table: {unreconciled}"
+        assert not undeclared, f"warehouse tables with no DDL: {undeclared}"
+
 
 class TestColumnsMatchTheContract:
     """The failure this prevents: a column added to a contract but not to the

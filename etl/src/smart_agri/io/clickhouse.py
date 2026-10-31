@@ -153,9 +153,27 @@ class ClickHouseSink:
             )
         )
 
-    def count(self, table: str) -> int:
+    def count(self, table: str, *, final: bool = False) -> int:
+        """Rows in a table; with `final`, as they will read once merges finish.
+
+        `FINAL` collapses rows a ReplacingMergeTree treats as duplicates — the
+        count that matters when asking whether a load lost anything. Plain
+        MergeTree rejects `FINAL`, so callers check the engine first.
+        """
         _check_identifier(table)
-        return int(self.scalar(f"SELECT count() FROM {table}") or 0)
+        modifier = " FINAL" if final else ""
+        return int(self.scalar(f"SELECT count() FROM {table}{modifier}") or 0)
+
+    def engine(self, table: str) -> str:
+        """The table's engine name, e.g. `ReplacingMergeTree`; empty if absent."""
+        _check_identifier(table)
+        return str(
+            self.scalar(
+                "SELECT engine FROM system.tables WHERE database = %(db)s AND name = %(table)s",
+                {"db": self._settings.db, "table": table},
+            )
+            or ""
+        )
 
     def columns(self, table: str) -> Sequence[str]:
         _check_identifier(table)

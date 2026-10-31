@@ -72,6 +72,7 @@ class LoadDimensionPipeline(BasePipeline):
         self.spec = spec
         self.name = f"load.{spec.dataset}"
         self.dataset = spec.dataset
+        self.warehouse_table = spec.table
         super().__init__(context)
 
     def extract(self, run: RunContext) -> pl.DataFrame:
@@ -94,6 +95,7 @@ class LoadFactPipeline(BasePipeline):
         self.spec = spec
         self.name = f"load.{spec.dataset}"
         self.dataset = spec.dataset
+        self.warehouse_table = spec.table
         super().__init__(context)
 
     def extract(self, run: RunContext) -> pl.DataFrame:  # noqa: ARG002
@@ -118,6 +120,7 @@ class LoadGoldPipeline(BasePipeline):
         self.spec = spec
         self.name = f"load.{spec.dataset}"
         self.dataset = spec.dataset
+        self.warehouse_table = spec.table
         super().__init__(context)
 
     def extract(self, run: RunContext) -> pl.DataFrame:

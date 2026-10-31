@@ -146,6 +146,8 @@ class _FakeClient:
     def __init__(self) -> None:
         self.commands: list[str] = []
         self.inserts: list[tuple[str, int]] = []
+        self.queries: list[tuple[str, dict[str, Any] | None]] = []
+        self.answer: Any = None
 
     def command(self, sql: str, parameters: dict[str, Any] | None = None) -> None:
         del parameters
@@ -153,6 +155,15 @@ class _FakeClient:
 
     def insert_arrow(self, table: str, arrow_table: Any) -> None:
         self.inserts.append((table, arrow_table.num_rows))
+
+    def query(self, sql: str, parameters: dict[str, Any] | None = None) -> Any:
+        """Records the query and answers with `self.answer` as its single cell."""
+        self.queries.append((sql, parameters))
+
+        class _Result:
+            result_rows = [] if self.answer is None else [(self.answer,)]
+
+        return _Result()
 
 
 @pytest.fixture
@@ -221,6 +232,42 @@ class TestClickHouseLoading:
         instance.delete_partition("fact_sensor_reading", "202608")
         assert "%(partition)s" in client.commands[0]
         assert "202608" not in client.commands[0]
+
+
+class TestClickHouseCounts:
+    def test_count_reads_the_raw_row_count(self, sink: tuple[ClickHouseSink, _FakeClient]) -> None:
+        instance, client = sink
+        client.answer = 7
+        assert instance.count("fact_harvest") == 7
+        assert client.queries[0][0] == "SELECT count() FROM fact_harvest"
+
+    def test_final_counts_rows_as_they_read_after_merges(
+        self, sink: tuple[ClickHouseSink, _FakeClient]
+    ) -> None:
+        instance, client = sink
+        client.answer = 5
+        assert instance.count("fact_harvest", final=True) == 5
+        assert client.queries[0][0] == "SELECT count() FROM fact_harvest FINAL"
+
+    def test_engine_is_looked_up_with_bound_parameters(
+        self, sink: tuple[ClickHouseSink, _FakeClient]
+    ) -> None:
+        instance, client = sink
+        client.answer = "ReplacingMergeTree"
+
+        assert instance.engine("fact_harvest") == "ReplacingMergeTree"
+        sql, params = client.queries[0]
+        assert "fact_harvest" not in sql
+        assert params == {"db": "agri_analytics", "table": "fact_harvest"}
+
+    def test_a_missing_table_has_no_engine(self, sink: tuple[ClickHouseSink, _FakeClient]) -> None:
+        assert sink[0].engine("nope") == ""
+
+    def test_count_rejects_an_unsafe_table_name(
+        self, sink: tuple[ClickHouseSink, _FakeClient]
+    ) -> None:
+        with pytest.raises(ValueError, match="invalid table name"):
+            sink[0].count("t FINAL; DROP TABLE x")
 
 
 class TestClickHouseLifecycle:

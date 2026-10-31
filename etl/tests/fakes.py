@@ -269,12 +269,19 @@ class FakeControlStore:
 
 
 class FakeClickHouseSink:
-    """Warehouse tables held as frames."""
+    """Warehouse tables held as frames.
+
+    Every table is a plain MergeTree unless `replacing_keys` names its sort key,
+    in which case it behaves as a ReplacingMergeTree: `count(final=True)`
+    collapses rows sharing that key. `FINAL` on a plain MergeTree raises, as the
+    real server does.
+    """
 
     def __init__(self) -> None:
         self.tables: dict[str, pl.DataFrame] = {}
         self.dropped_partitions: list[tuple[str, str]] = []
         self.statements: list[str] = []
+        self.replacing_keys: dict[str, list[str]] = {}
 
     def insert_frame(self, table: str, frame: pl.DataFrame) -> int:
         if frame.is_empty():
@@ -296,9 +303,20 @@ class FakeClickHouseSink:
         del parameters
         self.statements.append(sql)
 
-    def count(self, table: str) -> int:
+    def count(self, table: str, *, final: bool = False) -> int:
         frame = self.tables.get(table)
-        return 0 if frame is None else frame.height
+        if frame is None:
+            return 0
+        if not final:
+            return frame.height
+        keys = self.replacing_keys.get(table)
+        if keys is None:
+            msg = f"Storage MergeTree doesn't support FINAL ({table})"
+            raise RuntimeError(msg)
+        return frame.unique(subset=keys).height
+
+    def engine(self, table: str) -> str:
+        return "ReplacingMergeTree" if table in self.replacing_keys else "MergeTree"
 
     def table_exists(self, table: str) -> bool:
         return table in self.tables

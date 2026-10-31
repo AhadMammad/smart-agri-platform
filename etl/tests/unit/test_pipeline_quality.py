@@ -18,7 +18,7 @@ import pandera.polars as pa
 import polars as pl
 import pytest
 from pandera.engines import polars_engine
-from tests.fakes import FakeControlStore, FakeHdfsStore
+from tests.fakes import FakeClickHouseSink, FakeControlStore, FakeHdfsStore
 from typer.testing import CliRunner
 
 from smart_agri.config import DataQualitySettings, LakeZone, Settings
@@ -292,3 +292,95 @@ class TestCliExitCode:
         assert result.exit_code == DQ_FAILURE_EXIT_CODE == 3
         assert "stopped by data quality checks" in result.stderr
         assert "[failed] join.dim_field" in result.stderr
+
+
+class Loader(BasePipeline):
+    """Loads `frame` into the `fact_widget` warehouse table."""
+
+    name = "load.widget"
+    dataset = "widget"
+    warehouse_table = "fact_widget"
+    frame: ClassVar[pl.DataFrame] = pl.DataFrame({"widget_id": [1, 2, 3]})
+
+    def extract(self, run: RunContext) -> pl.DataFrame:
+        return self.frame
+
+    def load(self, frame: pl.DataFrame, run: RunContext) -> int:
+        return self.context.clickhouse.replace_table("fact_widget", frame)
+
+
+@pytest.fixture
+def clickhouse() -> FakeClickHouseSink:
+    return FakeClickHouseSink()
+
+
+@pytest.fixture
+def warehouse(control: FakeControlStore, clickhouse: FakeClickHouseSink) -> PipelineContext:
+    return PipelineContext(
+        control=control,  # type: ignore[arg-type]
+        clickhouse=clickhouse,  # type: ignore[arg-type]
+    )
+
+
+class TestWarehouseReconciliation:
+    def test_a_complete_load_passes(
+        self, warehouse: PipelineContext, control: FakeControlStore
+    ) -> None:
+        Loader(warehouse).run(LOGICAL_DATE)
+
+        (check,) = control.checks_named("reconciliation.row_count")
+        assert (check["outcome"], check["observed_value"], check["threshold"]) == (
+            "passed",
+            3,
+            3,
+        )
+        assert control.checks_named("reconciliation.unique_keys") == []
+
+    def test_a_short_load_fails_the_run(
+        self, warehouse: PipelineContext, control: FakeControlStore, clickhouse: FakeClickHouseSink
+    ) -> None:
+        """A partial insert, or a concurrent run truncating the table under this one."""
+
+        class LostRows(Loader):
+            def load(self, frame: pl.DataFrame, run: RunContext) -> int:
+                clickhouse.replace_table("fact_widget", frame.head(1))
+                return frame.height
+
+        with pytest.raises(DataQualityError, match=r"reconciliation\.row_count"):
+            LostRows(warehouse).run(LOGICAL_DATE)
+
+        (check,) = control.checks_named("reconciliation.row_count")
+        assert (check["outcome"], check["rows_failed"]) == ("failed", 2)
+        assert control.last_run["status"] is RunStatus.FAILED
+
+    def test_duplicate_keys_a_merge_would_collapse_fail_the_run(
+        self, warehouse: PipelineContext, control: FakeControlStore, clickhouse: FakeClickHouseSink
+    ) -> None:
+        """The count is right today and wrong after the next background merge."""
+        clickhouse.replacing_keys["fact_widget"] = ["widget_id"]
+
+        class Duplicated(Loader):
+            frame: ClassVar[pl.DataFrame] = pl.DataFrame({"widget_id": [1, 2, 2]})
+
+        with pytest.raises(DataQualityError, match=r"reconciliation\.unique_keys"):
+            Duplicated(warehouse).run(LOGICAL_DATE)
+
+        assert control.checks_named("reconciliation.row_count")[0]["outcome"] == "passed"
+        (unique,) = control.checks_named("reconciliation.unique_keys")
+        assert (unique["outcome"], unique["observed_value"], unique["rows_failed"]) == (
+            "failed",
+            2,
+            1,
+        )
+
+    def test_an_empty_load_reconciles_to_zero(
+        self, warehouse: PipelineContext, control: FakeControlStore, clickhouse: FakeClickHouseSink
+    ) -> None:
+        clickhouse.replacing_keys["fact_widget"] = ["widget_id"]
+
+        class Nothing(Loader):
+            frame: ClassVar[pl.DataFrame] = pl.DataFrame(schema={"widget_id": pl.Int64})
+
+        Nothing(warehouse).run(LOGICAL_DATE)
+
+        assert {c["outcome"] for c in control.checks} == {"passed"}

@@ -22,7 +22,14 @@ from smart_agri.config import LakeZone, Settings, get_settings
 from smart_agri.contracts import ValidationResult, validate
 from smart_agri.io import ClickHouseSink, ControlStore, HdfsStore, PostgresSource, RunStats
 from smart_agri.io.control import RunStatus
-from smart_agri.quality import CheckCollector, CheckResult, CheckType, Outcome, Severity
+from smart_agri.quality import (
+    CheckCollector,
+    CheckResult,
+    CheckType,
+    Outcome,
+    Severity,
+    outcome_for,
+)
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
@@ -115,6 +122,10 @@ class BasePipeline(ABC):
     #: source or the contract has changed and the run must not proceed.
     max_rejection_rate: float = 0.10
 
+    #: The ClickHouse table `load` writes, if any. Setting it is what turns on
+    #: the post-load reconciliation.
+    warehouse_table: str | None = None
+
     def __init__(self, context: PipelineContext | None = None) -> None:
         self.context = context or PipelineContext()
         #: Results of the current run. Replaced at the start of each `run`; built
@@ -185,8 +196,45 @@ class BasePipeline(ABC):
     def _pre_load_checks(self, frame: pl.DataFrame, run: RunContext) -> None:  # noqa: B027
         """Checks on the validated frame. An error here means nothing is written."""
 
-    def _post_load_checks(self, written: int, run: RunContext) -> None:  # noqa: B027
-        """Checks on what `load` wrote. An error here stops downstream stages."""
+    def _post_load_checks(self, written: int, run: RunContext) -> None:  # noqa: ARG002
+        """Checks on what `load` wrote. An error here stops downstream stages.
+
+        Reconciles the warehouse table, when the pipeline loads one.
+        """
+        if self.warehouse_table is not None:
+            self._reconcile_warehouse(self.warehouse_table, written)
+
+    def _reconcile_warehouse(self, table: str, written: int) -> None:
+        """The warehouse must hold exactly what was loaded — now, and after merges.
+
+        `row_count` catches an insert that landed short or a concurrent run that
+        truncated the table underneath this one. `unique_keys` catches what a
+        plain count cannot: a ReplacingMergeTree keeps rows that share a sort key
+        until a background merge silently collapses them, so a load with
+        duplicate keys reads correctly now and loses rows later.
+        """
+        sink = self.context.clickhouse
+        landed = sink.count(table)
+        self._record_reconciliation("reconciliation.row_count", table, landed, written)
+        if sink.engine(table) == "ReplacingMergeTree":
+            distinct = sink.count(table, final=True)
+            self._record_reconciliation("reconciliation.unique_keys", table, distinct, written)
+
+    def _record_reconciliation(self, name: str, table: str, observed: int, expected: int) -> None:
+        self.checks.record(
+            CheckResult(
+                check_name=name,
+                check_type=CheckType.RECONCILIATION,
+                severity=Severity.ERROR,
+                outcome=outcome_for(breached=observed != expected, severity=Severity.ERROR),
+                dataset=self.dataset,
+                target=table,
+                observed_value=observed,
+                threshold=expected,
+                rows_evaluated=expected,
+                rows_failed=abs(expected - observed),
+            )
+        )
 
     def _persist_checks_best_effort(self, run_id: uuid.UUID, run: RunContext) -> None:
         """Record results on the failure path without masking the real error.

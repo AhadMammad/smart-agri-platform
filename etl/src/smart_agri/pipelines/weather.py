@@ -358,7 +358,7 @@ class LoadDimDatePipeline(_WeatherPipeline):
 
     name = "load.dim_date"
     dataset = "dim_date"
-    table = "dim_date"
+    warehouse_table: str = "dim_date"
 
     def extract(self, run: RunContext) -> pl.DataFrame:
         return self.context.hdfs.read_parquet(
@@ -368,7 +368,7 @@ class LoadDimDatePipeline(_WeatherPipeline):
         )
 
     def load(self, frame: pl.DataFrame, run: RunContext) -> int:  # noqa: ARG002
-        return self.context.clickhouse.replace_table(self.table, frame)
+        return self.context.clickhouse.replace_table(self.warehouse_table, frame)
 
 
 class LoadFactWeatherDailyPipeline(_WeatherPipeline):
@@ -376,7 +376,7 @@ class LoadFactWeatherDailyPipeline(_WeatherPipeline):
 
     name = "load.fact_weather_daily"
     dataset = "fact_weather_daily"
-    table = "fact_weather_daily"
+    warehouse_table: str = "fact_weather_daily"
 
     def extract(self, run: RunContext) -> pl.DataFrame:
         return self.context.hdfs.read_parquet(
@@ -389,7 +389,7 @@ class LoadFactWeatherDailyPipeline(_WeatherPipeline):
         )
 
     def load(self, frame: pl.DataFrame, run: RunContext) -> int:  # noqa: ARG002
-        return self.context.clickhouse.replace_table(self.table, frame)
+        return self.context.clickhouse.replace_table(self.warehouse_table, frame)
 
 
 class LoadFieldWeatherDailyPipeline(_WeatherPipeline):
@@ -397,7 +397,7 @@ class LoadFieldWeatherDailyPipeline(_WeatherPipeline):
 
     name = "load.field_weather_daily"
     dataset = "field_weather_daily"
-    table = "agg_field_weather_daily"
+    warehouse_table: str = "agg_field_weather_daily"
 
     def extract(self, run: RunContext) -> pl.DataFrame:
         return self.context.hdfs.read_parquet(
@@ -407,7 +407,7 @@ class LoadFieldWeatherDailyPipeline(_WeatherPipeline):
         )
 
     def load(self, frame: pl.DataFrame, run: RunContext) -> int:  # noqa: ARG002
-        return self.context.clickhouse.replace_table(self.table, frame)
+        return self.context.clickhouse.replace_table(self.warehouse_table, frame)
 
 
 def days_between(window: WeatherWindow) -> int:
