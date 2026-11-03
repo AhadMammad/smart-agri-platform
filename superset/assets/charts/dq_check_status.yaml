@@ -20,6 +20,9 @@ params:
   - rows_failed
   - rows_evaluated
   - last_checked_at
+  # Displayed because Superset's raw table only sorts on a column it selects;
+  # sorting on `outcome` instead would be alphabetical and put warnings last.
+  - outcome_rank
   order_by_cols:
   - '["outcome_rank", true]'
   - '["pipeline", true]'
