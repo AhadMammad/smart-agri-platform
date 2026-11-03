@@ -109,6 +109,8 @@ check_port 9864 "hdfs datanode ui"
 check_port 9083 "hive metastore"
 check_port 8080 "airflow"
 check_port 8088 "superset"
+check_port 1025 "mailpit smtp"
+check_port 8025 "mailpit ui"
 echo
 
 # --- result ------------------------------------------------------------------

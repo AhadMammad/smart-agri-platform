@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pendulum
 from airflow.models.dag import DAG
+from common.defaults import with_alerts
 from common.lake_tasks import build_domain_stages
 from common.pipelines import ANALYTICS_STAGE_LABELS
 
@@ -26,14 +27,16 @@ with DAG(
     start_date=pendulum.datetime(2026, 7, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "owner": "data-platform",
-        "retries": 2,
-        "retry_delay": pendulum.duration(minutes=2),
-        # Longer than the lake DAGs: planting economics joins five facts and a
-        # date-range weather window across every planting in the estate.
-        "execution_timeout": pendulum.duration(minutes=60),
-    },
+    default_args=with_alerts(
+        {
+            "owner": "data-platform",
+            "retries": 2,
+            "retry_delay": pendulum.duration(minutes=2),
+            # Longer than the lake DAGs: planting economics joins five facts and a
+            # date-range weather window across every planting in the estate.
+            "execution_timeout": pendulum.duration(minutes=60),
+        }
+    ),
     tags=["analytics", "gold", "clickhouse", "phase-6"],
     doc_md=__doc__,
 ) as dag:

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pendulum
 from airflow.models.dag import DAG
+from common.defaults import with_alerts
 from common.weather_tasks import build_weather_stages
 
 with DAG(
@@ -26,14 +27,16 @@ with DAG(
     start_date=pendulum.datetime(2026, 7, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "owner": "data-platform",
-        "retries": 3,
-        "retry_delay": pendulum.duration(minutes=5),
-        # Generous: the rate limiter deliberately paces the archive calls, so a
-        # large estate takes minutes of mostly waiting.
-        "execution_timeout": pendulum.duration(hours=2),
-    },
+    default_args=with_alerts(
+        {
+            "owner": "data-platform",
+            "retries": 3,
+            "retry_delay": pendulum.duration(minutes=5),
+            # Generous: the rate limiter deliberately paces the archive calls, so a
+            # large estate takes minutes of mostly waiting.
+            "execution_timeout": pendulum.duration(hours=2),
+        }
+    ),
     tags=["weather", "backfill", "phase-4"],
     doc_md=__doc__,
 ) as dag:

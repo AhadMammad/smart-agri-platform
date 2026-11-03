@@ -47,6 +47,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
     AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # Failure email (Phase 9). Mailpit catches everything by default; point the
+    # SMTP_* variables at a real server to deliver it. ALERT_EMAIL_TO empty sends
+    # nothing. See airflow/dags/common/defaults.py.
+    AIRFLOW__SMTP__SMTP_HOST: ${SMTP_HOST:-mailpit}
+    AIRFLOW__SMTP__SMTP_PORT: ${SMTP_PORT:-1025}
+    AIRFLOW__SMTP__SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+    AIRFLOW__SMTP__SMTP_SSL: ${SMTP_SSL:-false}
+    AIRFLOW__SMTP__SMTP_USER: ${SMTP_USER:-}
+    AIRFLOW__SMTP__SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-airflow@smart-agri.local}
+    ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-data-platform@smart-agri.local}
     # Passed through to the DAGs so DockerOperator knows what to launch and where.
     ETL_IMAGE: ${ETL_IMAGE}
     ETL_TASK_NETWORK: ${ETL_TASK_NETWORK}
@@ -332,6 +343,22 @@ services:
     restart: unless-stopped
 
   # ------------------------------------------------------- orchestration -----
+  # Catches every alert email and shows it in a web UI, so alerting can be
+  # verified without real SMTP credentials. Replace by setting SMTP_HOST.
+  mailpit:
+    image: ${MAILPIT_IMAGE:-axllent/mailpit:v1.33.0}
+    profiles: [orchestration]
+    ports:
+      - "${MAILPIT_SMTP_HOST_PORT:-1025}:1025"
+      - "${MAILPIT_UI_HOST_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [agri-net]
+    restart: unless-stopped
+
   airflow-db:
     image: ${POSTGRES_IMAGE}
     profiles: [orchestration]

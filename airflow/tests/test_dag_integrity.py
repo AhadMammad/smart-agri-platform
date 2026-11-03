@@ -113,3 +113,16 @@ class TestDataQualityTasks:
         dag = dagbag.dags["data_quality"]
         assert str(dag.schedule_interval) == "@hourly"
         assert dag.get_task("freshness").command[:3] == ["dq", "run", "freshness"]
+
+
+class TestFailureAlerts:
+    def test_every_dag_emails_on_failure_but_not_on_retry(self, dagbag: DagBag) -> None:
+        """An error-severity data quality check stops a run; the email is how
+        anyone learns that it did. One message per failure, not per attempt."""
+        if not os.environ.get("ALERT_EMAIL_TO"):
+            pytest.skip("ALERT_EMAIL_TO is not set in this environment")
+        for dag_id, dag in dagbag.dags.items():
+            args = dag.default_args
+            assert args.get("email_on_failure") is True, f"{dag_id} sends no failure email"
+            assert args.get("email"), f"{dag_id} has no alert recipients"
+            assert args.get("email_on_retry") is False, f"{dag_id} emails on every retry"

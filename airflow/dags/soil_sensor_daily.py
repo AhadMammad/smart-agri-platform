@@ -14,6 +14,7 @@ from __future__ import annotations
 import pendulum
 from airflow.models.dag import DAG
 from airflow.utils.task_group import TaskGroup
+from common.defaults import with_alerts
 from common.etl_task import etl_task
 from common.lake_tasks import add_quality_group
 from common.pipelines import SOIL_SENSOR_STAGES, STAGE_LABELS, task_id_for
@@ -27,13 +28,15 @@ with DAG(
     # DAG replaying months of history the first time it is unpaused.
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "owner": "data-platform",
-        "retries": 2,
-        "retry_delay": pendulum.duration(minutes=2),
-        # A stuck task holds the only slot this DAG has; fail rather than block.
-        "execution_timeout": pendulum.duration(minutes=30),
-    },
+    default_args=with_alerts(
+        {
+            "owner": "data-platform",
+            "retries": 2,
+            "retry_delay": pendulum.duration(minutes=2),
+            # A stuck task holds the only slot this DAG has; fail rather than block.
+            "execution_timeout": pendulum.duration(minutes=30),
+        }
+    ),
     tags=["soil-sensor", "field-health", "phase-2"],
     doc_md=__doc__,
 ) as dag:

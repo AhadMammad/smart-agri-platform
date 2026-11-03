@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pendulum
 from airflow.models.dag import DAG
+from common.defaults import with_alerts
 from common.etl_task import etl_task
 from common.pipelines import SCHEDULED_QUALITY_SUITES
 
@@ -22,12 +23,14 @@ with DAG(
     start_date=pendulum.datetime(2026, 7, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "owner": "data-platform",
-        "retries": 1,
-        "retry_delay": pendulum.duration(minutes=2),
-        "execution_timeout": pendulum.duration(minutes=10),
-    },
+    default_args=with_alerts(
+        {
+            "owner": "data-platform",
+            "retries": 1,
+            "retry_delay": pendulum.duration(minutes=2),
+            "execution_timeout": pendulum.duration(minutes=10),
+        }
+    ),
     tags=["data-quality", "phase-9"],
     doc_md=__doc__,
 ) as dag:

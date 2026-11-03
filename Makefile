@@ -325,6 +325,7 @@ urls: ## Print the web UIs exposed by the stack
 	@echo "Superset   http://localhost:$$(grep -E '^SUPERSET_HOST_PORT=' $(ENV_FILE) | cut -d= -f2)"
 	@echo "HDFS       http://localhost:$$(grep -E '^HDFS_NAMENODE_HTTP_HOST_PORT=' $(ENV_FILE) | cut -d= -f2)"
 	@echo "ClickHouse http://localhost:$$(grep -E '^CLICKHOUSE_HTTP_HOST_PORT=' $(ENV_FILE) | cut -d= -f2)/play"
+	@echo "Mailpit    http://localhost:$(call envval,MAILPIT_UI_HOST_PORT,8025)"
 
 # -----------------------------------------------------------------------------
 # ETL application quality gate — the same commands CI runs

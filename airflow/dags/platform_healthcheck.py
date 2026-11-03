@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pendulum
 from airflow.models.dag import DAG
+from common.defaults import with_alerts
 from common.etl_task import etl_task
 
 with DAG(
@@ -22,11 +23,13 @@ with DAG(
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
-    default_args={
-        "owner": "data-platform",
-        "retries": 2,
-        "retry_delay": pendulum.duration(minutes=1),
-    },
+    default_args=with_alerts(
+        {
+            "owner": "data-platform",
+            "retries": 2,
+            "retry_delay": pendulum.duration(minutes=1),
+        }
+    ),
     tags=["platform", "phase-1"],
 ) as dag:
     etl_task(
