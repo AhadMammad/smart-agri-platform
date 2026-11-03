@@ -47,6 +47,7 @@ fmt` is normally only needed after a bulk change.
 | `io/` | Postgres (ADBC), WebHDFS, ClickHouse, Open-Meteo, and the control store |
 | `pipelines/` | `extract → validate → transform → load`, plus the specs and registry |
 | `generator/` | Synthetic data generator and the Postgres seeder |
+| `quality/` | Check results and severity, volume rule, the `dq` suites and the ClickHouse export |
 | `metastore.py` | Hive DDL generated from the contracts |
 | `cli.py` | The Typer app — the only entrypoint |
 
@@ -58,10 +59,20 @@ This keeps `--help` fast, and `--help` is the image's default `CMD`. Keep it.
 Bronze schemas are `strict=False` — presence and coarse types only, because
 Bronze is as-extracted. Silver schemas are `strict=True` with ranges,
 uniqueness and `utc_datetime()` on timestamps; that boundary is what fills
-`/lake/quarantine`.
+`/lake/quarantine`. Cross-column rules are `row_rule(name, expr)` in the
+schema's `checks=` — no `error=` message, because pandera would report it in
+place of the name the result is tracked under.
 
 Adding one means three edits: the definition in `contracts/schemas.py`, the
 import in `contracts/__init__.py`, and the name in `__all__` there.
+
+## Data quality in a pipeline
+
+`BasePipeline.run` records every check into `self.checks` and persists them
+before closing the run, on success and failure. Use the counted helpers, never
+a bare inner join or filter: `_inner_join(..., target=)`, `_filter(..., name=)`,
+`_dedupe_on(...)`. Test pipelines that assert an exact set of checks set
+`volume_rule = None`, or a skipped `volume.rows` result joins every run.
 
 ## Tests
 
@@ -88,6 +99,10 @@ they will fail if you edit one side only:
 | `test_seeder_columns.py` | the seeder's COPY columns vs the Liquibase changelogs |
 | `test_reference_catalogue.py` | the Python `CROPS`/`ALL_REGIONS` vs the Liquibase INSERTs |
 | `test_metastore.py` | the hand-listed weather tables vs the registry |
+| `test_control.py` | `DQ_RESULT_COLUMNS` and the check enums vs the etl-meta changelog |
+| `test_quality_export.py` | the export queries vs the Liquibase columns and the ClickHouse DDL |
+| `test_control_migration.py` | the copied `etl_control` columns vs both changelogs |
+| `test_clickhouse_ddl.py` | every `load.*` pipeline declares a `warehouse_table` the DDL creates |
 
 Treat a failure in any of these as "you edited one of a pair" before assuming
 the test is wrong.

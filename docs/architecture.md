@@ -328,6 +328,74 @@ make up-bi && make superset-import
 That touches neither ClickHouse nor the OLTP Postgres; the only thing lost is
 anything created in the UI and never exported back with `make superset-export`.
 
+## Data quality
+
+Phase 9 turned the Phase 2 quarantine into a data quality system. The code is
+`etl/src/smart_agri/quality/`; this is why it is shaped the way it is.
+
+### Pandera, not Great Expectations
+
+The row gate was already pandera, on Polars, and its contracts already generate
+the Hive DDL. Great Expectations would have added a second copy of every
+contract, and it has no native Polars engine — each validation would convert to
+pandas or go through SQL. Table-level checks with history and a UI belong to the
+catalog (OpenMetadata, Phase 10), so GX would duplicate one tool or the other.
+The split is: **pandera inside the pipeline, on the frame, before anything is
+written; OpenMetadata at the table, after it lands.**
+
+### Severity is the consequence, not the check
+
+Every check produces the same `CheckResult`, and its severity decides what a
+breach does. An `error` raises `DataQualityError`, the task fails, and Airflow's
+default trigger rule stops every later stage — so the gate needs no Airflow
+logic of its own. A `warn` is recorded and the run carries on. A check with no
+threshold is a measurement: it always passes, and exists so the number has a
+history.
+
+Defaults lean towards warning. An error is reserved for what makes data
+*wrong* rather than *unusual*: a frame failing its contract wholesale, a
+warehouse holding a different row count from what was loaded, more rows than
+the source. Everything else — orphans at a join, a volume swing, staleness —
+is a warning until a threshold is tuned on real history. `SMART_AGRI_DQ_ENFORCE=false`
+downgrades errors to warnings for a backfill over history already known to be
+bad; it is never the default.
+
+### Checks run where their evidence is
+
+- **Inside the pipeline**, against the frame in memory: contracts, row rules,
+  join and filter drops, volume, and the post-load reconciliation. They share
+  the run's id, and the pre-load ones stop a bad frame before it overwrites the
+  lake.
+- **As suites** (`smart-agri dq run <suite>`), for questions no one stage can
+  answer. Reconciliation crosses Postgres, the watermarks and ClickHouse, and
+  runs in a `quality` group after a domain's load. Freshness runs from its own
+  hourly DAG, because the failure it exists to catch — a DAG that never ran — is
+  the one where that DAG's own checks never run either.
+
+Results are persisted *before* the run is closed, on success and on failure, so
+a stopped run always says which check stopped it. Recording them can fail —
+etl-meta-db may be what broke — and that error is logged and swallowed rather
+than allowed to replace the pipeline's own.
+
+### Details that are load-bearing
+
+- **A structural failure anywhere fails the whole frame.** pandera reports a
+  wrong dtype or a missing column with a null row index. Quarantining only the
+  row-level failures beside it — the pre-Phase-9 behaviour — passed the rest of
+  the frame through with the broken column still in it.
+- **Reconciliation counts with `FINAL` on a ReplacingMergeTree.** A load with
+  duplicate sort keys reads correctly until a background merge silently
+  collapses them; `count() FINAL` is the count after that merge. Plain
+  MergeTree rejects `FINAL`, so the engine is looked up first.
+- **The source count is bounded by the watermark.** Rows written since the last
+  extract are not missing, they are not yet extracted.
+- **Volume compares with the median of recent successful runs**, so one backfill
+  or empty day does not move the baseline, and is off for incremental stages,
+  whose batches are legitimately empty whenever the source is quiet.
+- **One writer for the ClickHouse copies.** `replace_table` is TRUNCATE then
+  INSERT; the export runs only from the `data_quality` DAG so two can never
+  interleave.
+
 ## Image pinning
 
 Every tag is pinned in `.env`. Two pins are load-bearing:

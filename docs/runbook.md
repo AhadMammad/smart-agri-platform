@@ -1,4 +1,4 @@
-# From a clone to four dashboards
+# From a clone to six dashboards
 
 The whole path, in order, with what each step should print. Roughly 25 minutes
 on a cold machine, most of it image pulls.
@@ -117,11 +117,11 @@ make urls               # the web UIs
 `verify-dashboards` is the proof, and it should end:
 
 ```
-21 returning data, 0 empty, 0 failing
+28 returning data, 0 empty, 0 failing
 ```
 
 Then open Superset at the port `make urls` prints, log in with the credentials in
-`.env`, and the four dashboards are under **Dashboards**:
+`.env`, and the six dashboards are under **Dashboards**:
 
 | Dashboard | Answers |
 |---|---|
@@ -129,6 +129,15 @@ Then open Superset at the port `make urls` prints, log in with the credentials i
 | Irrigation & Water | rainfall against measured moisture; irrigation dependence |
 | Machinery & Fleet | utilisation, fuel per hectare, faults |
 | Yield & Economics | margin per hectare, cost structure, yield against water |
+| Farm & Field Map | where every field is |
+| Data Quality | which checks pass, what is failing now, where rows were dropped, what has gone stale |
+
+The Data Quality charts read copies made by the `export` suite. Before the
+`data_quality` DAG has run once, fill them by hand:
+
+```bash
+make dq SUITE=freshness && make dq SUITE=export
+```
 
 ## 6. Orchestration
 
@@ -146,6 +155,10 @@ make urls   # the Airflow URL and credentials
 | `weather_daily` | 05:30 UTC | Open-Meteo refresh |
 | `weather_backfill` | manual | the full history |
 | `analytics_daily` | 07:00 UTC | the marts and the warehouse load |
+| `data_quality` | `@hourly` | freshness of every domain, then the copy of all results to ClickHouse |
+
+`soil_sensor_daily` and `analytics_daily` end with a `quality` group that
+reconciles each warehouse table against its Postgres source.
 
 `analytics_daily` runs after the others because a mart is cross-domain. Every
 Gold pipeline reads Silver at its own logical date, so triggering a DAG for a
@@ -169,6 +182,33 @@ Run before committing; all of them are also CI jobs.
 the full stack is too heavy for a hosted runner, which is why every phase's exit
 criterion is measured on the VM instead.
 
+## Responding to a data quality alert
+
+A task that fails for good emails `ALERT_EMAIL_TO`. With the default `.env`
+that lands in **Mailpit** — open the port `make urls` prints. To deliver for
+real, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` and
+`SMTP_STARTTLS` in `.env` and restart the Airflow services.
+
+A run stopped by a check exits with **code 3**; a crash exits 1. The task log
+lists every check that failed. To see the evidence behind one:
+
+```bash
+scripts/vm.sh meta "SELECT check_name, observed_value, threshold, details
+                      FROM etl_control.dq_check_result
+                     WHERE outcome = 'failed' ORDER BY checked_at DESC LIMIT 10"
+```
+
+| Failed check | Usually means |
+|---|---|
+| `rejection_rate` | the source or the contract changed; `/lake/quarantine/…/report.parquet` names the failing checks |
+| `reconciliation.row_count` | an insert landed short, or two runs loaded one table at once |
+| `reconciliation.unique_keys` | the load had duplicate sort keys that a merge would collapse — a dedupe is missing upstream |
+| `reconcile.<table>.no_duplicates` | the warehouse holds more rows than the source |
+
+Once the cause is fixed, clear the task in Airflow to re-run it. For a
+deliberate backfill over history known to be bad, `SMART_AGRI_DQ_ENFORCE=false`
+records error checks as warnings instead of stopping — set it for that run only.
+
 ## When something is wrong
 
 | Symptom | Cause |
@@ -176,6 +216,8 @@ criterion is measured on the VM instead.
 | `make analytics` fails naming `gold.field_weather_daily` | weather has not run for that date — run `make weather` |
 | A pipeline writes 0 rows and reports success | its Bronze watermark is caught up; that is idempotent, not broken |
 | Rows in `/lake/quarantine/…` | Silver rejected them; `report.parquet` beside them names the failing check |
+| A task exits with code 3 | a data quality check stopped it — see the section above |
+| A Data Quality chart is empty | the `export` suite has not run yet — `make dq SUITE=export` |
 | A chart renders an error | run `make verify-dashboards`; a renamed mart column is the usual cause |
 | A DAG task dies instantly | check `_FORWARDED_ENV_VARS` in `airflow/dags/common/etl_task.py` |
 

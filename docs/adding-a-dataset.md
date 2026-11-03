@@ -54,6 +54,17 @@ In `etl/src/smart_agri/contracts/schemas.py`:
   it applies, and `utc_datetime()` on timestamps. This is the boundary that
   fills `/lake/quarantine`, so it is where the real assertions go.
 
+A rule across columns of one row — an end after its start — is a `row_rule`
+in the schema's `checks=[...]`. It quarantines only the rows that break it, like
+a range check, and a null comparison passes: nullability is the column's job.
+
+```python
+checks=[row_rule("finished_after_started", pl.col("finished_at") >= pl.col("started_at"))],
+```
+
+Before adding one, count how many rows the seeded data would break: a rule the
+generator violates quarantines on every run.
+
 Then in `etl/src/smart_agri/contracts/__init__.py`, add **both** names to the
 import block **and** to `__all__`. `no_implicit_reexport` is on: omitting the
 `__all__` entry fails type checking at the import site, which is confusing to
@@ -88,7 +99,7 @@ FACT_SENSOR_READING = SilverSpec(
     schema=SILVER_FACT_SENSOR_READING,
     incremental=True,
     joins=(JoinSpec(dataset="sensor", on=("sensor_id",), columns=("field_id",)),),
-    filters=(pl.col("status") != "decommissioned",),
+    filters=(RowFilter("decommissioned_sensor", pl.col("status") != "decommissioned"),),
     derive={"reading_date": pl.col("reading_ts").dt.date()},
     cast={"reading_id": pl.Int64, "field_id": pl.Int64},
     dedupe_on=("reading_id",),
@@ -100,6 +111,11 @@ Joins may only target snapshot datasets. Every fact needs `farm_id`, and every
 fact with a timestamp needs a derived `_date` column —
 `tests/unit/test_silver_specs.py` asserts all of this over every spec, so a
 mistake here surfaces as a parametrized test failure naming your dataset.
+
+Every row a join or filter drops is counted as a data quality result. A join
+warns on any orphan by default; give it `max_drop_rate=` and `severity=` when a
+broken parent should stop the run instead. A `RowFilter` is a measurement unless
+it is given a threshold, because dropping rows is the point of a filter.
 
 `SilverPipeline` applies the spec in a fixed order: joins → rename → trim/lower/
 upper → cast → derive → select in schema order → dedupe → sort. If a
@@ -149,6 +165,14 @@ Then the load pipeline: a `DimLoadSpec(dataset, table)` appended to
 `DIM_LOAD_SPECS` in `pipelines/load.py` for a plain dimension, or a bespoke
 `Load*Pipeline` for anything else. Gold aggregates take an `agg_` table prefix.
 
+A bespoke load must set `warehouse_table`: that is what turns on the post-load
+reconciliation, and `test_clickhouse_ddl.py` fails any `load.*` pipeline
+without one. A spec-driven load is also reconciled against its Postgres source
+by the domain's `reconcile.<domain>` suite automatically — if the domain had
+no such suite before, add it to `DOMAIN_QUALITY_SUITES` in
+`airflow/dags/common/pipelines.py`, which `test_dag_pipeline_sync.py` will ask
+for.
+
 ## 12. Hive Metastore
 
 Automatic. `metastore.py::table_specs()` walks the Bronze and Silver spec tuples
@@ -184,6 +208,8 @@ scripts/vm.sh make seed
 scripts/vm.sh exec 'make run PIPELINE=bronze.<name> && make run PIPELINE=silver.<name>'
 scripts/vm.sh make register-tables
 scripts/vm.sh ch 'SELECT count(*) FROM <table>'
+scripts/vm.sh meta "SELECT check_name, outcome, rows_failed FROM etl_control.dq_check_result
+                     WHERE dataset = '<name>' ORDER BY checked_at DESC LIMIT 20"
 ```
 
 Run the pipeline **twice**. Idempotence is the property most likely to be wrong:

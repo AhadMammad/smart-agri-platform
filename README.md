@@ -27,7 +27,7 @@ schema in ClickHouse, and are presented through Superset dashboards.
                       └────────┬────────────┘
                                ▼
                       ┌─────────────────────┐
-                      │  Apache Superset    │  4 dashboards, YAML-defined
+                      │  Apache Superset    │  6 dashboards, YAML-defined
                       └─────────────────────┘
 
   Airflow (Celery) orchestrates every step; each task is one DockerOperator
@@ -151,9 +151,10 @@ queries every view, catching SQL that no column-level test can.
 
 ## Dashboards
 
-Four dashboards, one per analytics domain, defined entirely as YAML in
-[superset/assets/](superset/assets/) — 8 datasets, 21 charts and the filters and
-layout that go with them. Nothing is configured by hand in the UI.
+Six dashboards — one per analytics domain, a farm map, and one for data
+quality — defined entirely as YAML in [superset/assets/](superset/assets/): 13
+datasets, 28 charts and the filters and layout that go with them. Nothing is
+configured by hand in the UI.
 
 ```bash
 make superset-import     # datasets, charts and dashboards from YAML
@@ -167,6 +168,8 @@ make superset-export     # pull UI edits back into the tree, then review the dif
 | Irrigation & Water | water daily + irrigation daily | rainfall against measured moisture, and how much of the water was paid for |
 | Machinery & Fleet | machine daily + utilisation | working/idle/parked/down days, fuel per hectare, faults |
 | Yield & Economics | planting economics + cost breakdown | margin per hectare, cost structure, yield against water received |
+| Farm & Field Map | field locations | every field on an OpenStreetMap basemap, sized by area |
+| Data Quality | check results + run log | outcomes over time, what is failing now, rows dropped per join, pipeline freshness |
 
 The workflow is export-and-review, not edit-in-place: tweak a chart in the UI,
 run `make superset-export`, and commit the diff. What is committed is what a
@@ -182,6 +185,34 @@ Superset resolves only at import:
 - `make verify-dashboards` runs each chart through Superset's own query
   pipeline and reports its row count, which is the only way to learn that a
   chart imports cleanly and then renders nothing.
+
+## Data quality
+
+Every pipeline run checks its own data, and the checks decide whether the run
+may continue. A check's **severity** is its consequence: an *error* stops the run
+— before the load when it can, so nothing downstream ever sees the data — and a
+*warning* is recorded and shown. Error-severity stops are what the alert email
+reports.
+
+| Check | Where | Severity |
+|---|---|---|
+| Schema contract (pandera), incl. cross-column row rules | every validated stage | rows quarantined; error above 10% rejected |
+| Rows dropped at a join, filter or dedupe | Silver, Gold, weather | join orphans warn; filters and dedupes are measured |
+| Row count against recent runs | every non-incremental stage | warn outside 0.5×–2× the median |
+| Warehouse count against rows loaded, now and after merges | every ClickHouse load | error |
+| Warehouse against the Postgres source, watermark-bounded | `quality` group after each load | error if larger, warn if >2% short |
+| Hours since each domain last succeeded | hourly `data_quality` DAG | warn after 26 h |
+
+```bash
+make dq-list                         # the suites that run outside a pipeline
+make dq SUITE=freshness              # run one; exits 3 if an error check failed
+make dq SUITE=export                 # copy results to ClickHouse for the dashboard
+```
+
+Results live in `etl-meta-db` beside the run log, are copied hourly into
+ClickHouse, and feed the Data Quality dashboard. A run stopped by a check exits
+with code 3, distinct from a crash. [docs/architecture.md](docs/architecture.md#data-quality)
+explains why pandera and not Great Expectations, and how severity was chosen.
 
 ## The generated dataset
 

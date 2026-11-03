@@ -257,6 +257,16 @@ lake: ## Fill every Bronze and Silver zone: reference, operations, machinery, im
 analytics: ## Build the Gold marts and load the whole ClickHouse star schema
 	$(MAKE) --no-print-directory run-domain DOMAIN=analytics $(if $(DATE),DATE=$(DATE),)
 
+.PHONY: dq
+dq: ## Run a data quality suite; SUITE=freshness|export|reconcile.<domain> [DATE=YYYY-MM-DD]
+	@test -n "$(SUITE)" || { echo "usage: make dq SUITE=<name> [DATE=...]  (suites: make dq-list)"; exit 2; }
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \
+	  $(ETL_IMAGE) dq run $(SUITE) $(if $(DATE),--date $(DATE),)
+
+.PHONY: dq-list
+dq-list: ## List the data quality suites
+	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) $(ETL_IMAGE) dq list
+
 .PHONY: weather-backfill
 weather-backfill: ## Load the full Open-Meteo history for every farm (needs network)
 	docker run --rm --network $(NETWORK) --env-file $(ENV_FILE) \

@@ -28,6 +28,8 @@ first, plain `uv run` works — but `make` will not.
 | `make validate-compose` | `docker compose config -q` across all three profiles | `compose` |
 | `make validate-ddl` | applies the ClickHouse DDL to a throwaway server, queries every view | `ddl` |
 | `make check-docs` | every documented `make` target and relative link resolves | `docs` |
+| `make migrate` | etl-meta-db changelog, copy `etl_control`, then the source changelog — in that order | not in CI |
+| `make dq SUITE=<name>` | one data quality suite (`make dq-list`); exits 3 if an error check failed | not in CI |
 | `make test-dags` | DAG integrity tests inside the scheduler container | `dags` |
 | `make test-integration` | integration suite on the platform network | not in CI |
 | `make verify-dashboards` | runs every Superset chart, reports its row count | not in CI |
@@ -111,6 +113,20 @@ checklist: `docs/adding-a-dataset.md`.
 declarations, because Airflow must never import the ETL package. Every stage
 edit must be made in both, identically. `tests/unit/test_dag_pipeline_sync.py`
 parses the Airflow copy with `ast` and diffs it.
+
+**The data quality suites exist twice too.** `DOMAIN_QUALITY_SUITES` and
+`SCHEDULED_QUALITY_SUITES` in `airflow/dags/common/pipelines.py` mirror what
+`smart_agri.quality.suites` derives; `test_dag_pipeline_sync.py` diffs them.
+
+**The ETL's bookkeeping lives in etl-meta-db, not the source.** Watermarks, the
+run log and `dq_check_result` are in `etl_control` on the `etl-meta-db`
+container (`ETL_META_*`, `scripts/vm.sh meta`). The source Postgres is
+read-only to the ETL; never add a table to it that the ETL writes.
+
+**The ops columns are declared three times.** `etl_control.dq_check_result` and
+`run_log` in `liquibase/etl-meta/`, the export queries in
+`quality/export.py`, and `clickhouse/ddl/ops/080_ops.sql`.
+`test_quality_export.py` and `test_control.py` diff them — edit all three.
 
 **New env vars need registering.** A variable not listed in `_FORWARDED_ENV_VARS`
 in `airflow/dags/common/etl_task.py` silently never reaches the task container.
