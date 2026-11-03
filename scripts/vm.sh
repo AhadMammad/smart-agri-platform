@@ -29,7 +29,7 @@ usage: scripts/vm.sh <command> [args]
   ch '<sql>'          run a query against the ClickHouse analytics database
   psql '<sql>'        run a query against the Postgres source database
   meta '<sql>'        run a query against etl-meta-db (watermarks, run log, DQ results)
-  tunnel [service]    SSH-forward a VM service to localhost (hive|postgres|clickhouse|superset; default hive)
+  tunnel [service]    SSH-forward a VM service to localhost (hive|postgres|clickhouse|superset|airflow|mailpit; default hive)
                        foreground — Ctrl-C to close
 
 Connection details are read from .env.vm — see .env.vm.example.
@@ -151,7 +151,9 @@ cmd_tunnel() {
     postgres)   port=5432  ;;
     clickhouse) port=8123  ;;
     superset)   port=8088  ;;
-    *) die "unknown tunnel service: $service (expected hive|postgres|clickhouse|superset)" ;;
+    airflow)    port=8080  ;;
+    mailpit)    port=8025  ;;
+    *) die "unknown tunnel service: $service (expected hive|postgres|clickhouse|superset|airflow|mailpit)" ;;
   esac
   echo "tunnelling 127.0.0.1:${port} -> ${VM_HOST}:${port} (${service} on the VM) — Ctrl-C to close"
   exec ssh "${SSH_OPTS[@]}" \
