@@ -283,8 +283,11 @@ def _reconciled_domains() -> tuple[str, ...]:
 
 def dq_suites() -> dict[str, Callable[[PipelineContext], list[CheckResult]]]:
     """Every suite, by the name `smart-agri dq run <name>` takes."""
+    from smart_agri.quality.export import export_operational_data
+
     suites: dict[str, Callable[[PipelineContext], list[CheckResult]]] = {
         "freshness": check_freshness,
+        "export": export_operational_data,
     }
     for domain in _reconciled_domains():
         suites[f"reconcile.{domain}"] = partial(reconcile_domain, domain)

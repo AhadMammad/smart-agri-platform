@@ -174,8 +174,10 @@ DOMAIN_QUALITY_SUITES: dict[str, tuple[str, ...]] = {
 #: The TaskGroup the suites run in, after the domain's last stage.
 QUALITY_GROUP = "quality"
 
-#: Suites the hourly `data_quality` DAG runs, independent of any domain DAG.
-SCHEDULED_QUALITY_SUITES: tuple[str, ...] = ("freshness",)
+#: Suites the hourly `data_quality` DAG runs, in order, independent of any
+#: domain DAG. `export` is last so the copy it makes includes this hour's
+#: freshness results.
+SCHEDULED_QUALITY_SUITES: tuple[str, ...] = ("freshness", "export")
 
 #: Bronze and Silver stages share these labels across the Phase 5 domains.
 LAKE_STAGE_LABELS: tuple[str, ...] = ("bronze", "silver")

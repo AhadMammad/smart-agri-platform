@@ -4,6 +4,10 @@ Freshness asks whether each domain has succeeded recently enough. It runs here,
 on its own hourly schedule, because the failure it exists to catch — a paused
 or broken DAG — is exactly the one where that DAG's own checks never run.
 
+Export then copies the run log and every check result into ClickHouse for the
+Data Quality dashboard. It is the only writer of those tables, so it runs only
+here, never from a domain DAG.
+
 Each task is `smart-agri dq run <suite>`, recorded as a `dq.<suite>` run with
 its results in etl-meta-db.
 """
@@ -34,8 +38,12 @@ with DAG(
     tags=["data-quality", "phase-9"],
     doc_md=__doc__,
 ) as dag:
+    previous = None
     for suite in SCHEDULED_QUALITY_SUITES:
-        etl_task(
+        task = etl_task(
             task_id=suite.replace(".", "_"),
             command=["dq", "run", suite, "--date", "{{ ds }}"],
         )
+        if previous is not None:
+            previous >> task
+        previous = task

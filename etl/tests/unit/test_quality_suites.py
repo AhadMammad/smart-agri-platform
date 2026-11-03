@@ -255,7 +255,12 @@ class TestReconcileDomain:
 # --- running a suite ---------------------------------------------------------
 class TestSuiteRegistry:
     def test_freshness_and_each_reconciled_domain_are_suites(self) -> None:
-        assert set(dq_suites()) == {"freshness", "reconcile.soil_sensor", "reconcile.analytics"}
+        assert set(dq_suites()) == {
+            "freshness",
+            "export",
+            "reconcile.soil_sensor",
+            "reconcile.analytics",
+        }
 
     def test_domain_suites_name_registered_suites(self) -> None:
         for names in domain_quality_suites().values():
@@ -303,7 +308,7 @@ class TestRunSuite:
         assert control.checks[0]["outcome"] == "failed"
 
     def test_an_unknown_suite_names_the_valid_ones(self, context: PipelineContext) -> None:
-        with pytest.raises(KeyError, match="valid suites: freshness"):
+        with pytest.raises(KeyError, match="valid suites: export, freshness"):
             run_suite("nope", LOGICAL_DATE, context)
 
     def test_the_summary_counts_each_outcome(self, context: PipelineContext) -> None:

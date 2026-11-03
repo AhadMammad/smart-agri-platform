@@ -113,6 +113,9 @@ class TestDataQualityTasks:
         dag = dagbag.dags["data_quality"]
         assert str(dag.schedule_interval) == "@hourly"
         assert dag.get_task("freshness").command[:3] == ["dq", "run", "freshness"]
+        export = dag.get_task("export")
+        assert export.command[:3] == ["dq", "run", "export"]
+        assert export.upstream_task_ids == {"freshness"}
 
 
 class TestFailureAlerts:

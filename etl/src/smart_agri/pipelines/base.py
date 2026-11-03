@@ -63,12 +63,14 @@ class PipelineContext:
         hdfs: HdfsStore | None = None,
         control: ControlStore | None = None,
         clickhouse: ClickHouseSink | None = None,
+        etl_meta: PostgresSource | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self._postgres = postgres
         self._hdfs = hdfs
         self._control = control
         self._clickhouse = clickhouse
+        self._etl_meta = etl_meta
 
     @property
     def postgres(self) -> PostgresSource:
@@ -87,6 +89,13 @@ class PipelineContext:
         if self._control is None:
             self._control = ControlStore(self.settings.etl_meta)
         return self._control
+
+    @property
+    def etl_meta(self) -> PostgresSource:
+        """Read access to etl-meta-db as frames, for exporting it to the warehouse."""
+        if self._etl_meta is None:
+            self._etl_meta = PostgresSource(self.settings.etl_meta)
+        return self._etl_meta
 
     @property
     def clickhouse(self) -> ClickHouseSink:
