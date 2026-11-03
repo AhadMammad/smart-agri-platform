@@ -1,0 +1,30 @@
+# Every check, every day, by outcome
+slice_name: Check outcomes per day
+description: Checks evaluated per day, stacked by outcome — passed, warned, failed or skipped
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: fa4ec418-cd95-5921-a056-ebbcb83d360e__table
+  granularity_sqla: check_date
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_bar
+  x_axis: check_date
+  time_grain_sqla: P1D
+  metrics:
+  - checks_total
+  groupby:
+  - outcome
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Day
+  x_axis_title_margin: 30
+  y_axis_title: Checks
+  y_axis_title_margin: 50
+  show_legend: true
+query_context: null
+cache_timeout: null
+uuid: bbf541d3-2823-5381-b418-38f63dcbb40b
+version: 1.0.0
+dataset_uuid: fa4ec418-cd95-5921-a056-ebbcb83d360e

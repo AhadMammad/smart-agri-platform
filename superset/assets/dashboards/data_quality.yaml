@@ -1,0 +1,257 @@
+# Data Quality — the Phase 9 results.
+#
+# Reads only the ops_* tables and the v_dq_* / v_pipeline_freshness views over
+# them, all copied from etl-meta-db, never the business tables: this dashboard
+# describes the platform's checks, not the farms. Layout follows the triage
+# order — is it getting worse, what is failing now, where are rows going, and
+# what has stopped running.
+#
+# UUIDs here and in the charts and datasets it uses are uuid5 under the
+# namespace uuid5(NAMESPACE_DNS, 'smart-agri-platform.data-quality').
+dashboard_title: Data Quality
+description: Data quality check outcomes, dropped rows and pipeline freshness
+css: ''
+slug: data-quality
+uuid: a6f49027-20a7-5bf5-aeed-9f2e61ccf65b
+version: 1.0.0
+certified_by: null
+certification_details: null
+published: true
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    type: ROOT
+    id: ROOT_ID
+    children:
+      - GRID_ID
+  GRID_ID:
+    type: GRID
+    id: GRID_ID
+    children:
+      - ROW-header
+      - ROW-trend
+      - ROW-status
+      - ROW-drops
+      - ROW-runs
+    parents:
+      - ROOT_ID
+  HEADER_ID:
+    type: HEADER
+    id: HEADER_ID
+    meta:
+      text: Data Quality
+
+  ROW-header:
+    type: ROW
+    id: ROW-header
+    children:
+      - MARKDOWN-intro
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  MARKDOWN-intro:
+    type: MARKDOWN
+    id: MARKDOWN-intro
+    children: []
+    meta:
+      width: 12
+      height: 30
+      code: |-
+        ## Data Quality
+
+        The result of every check run by every pipeline and suite, from
+        `ops_dq_check_result` — copied hourly from etl-meta-db by the `data_quality` DAG.
+
+        A check's **severity** decides what a breach does: an *error* stops the run, so
+        nothing downstream sees the data, while a *warning* is recorded here and the run
+        carries on. A check without a threshold is a measurement and always passes, so
+        its number has a history.
+
+        Rows **dropped** are counted where they leave: orphans at a join, exclusions at a
+        filter, duplicates at a dedupe. **Freshness** is hours since a pipeline last
+        succeeded; a domain is stale after 26 hours.
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-header
+
+  ROW-trend:
+    type: ROW
+    id: ROW-trend
+    children:
+      - CHART-outcomes-per-day
+      - CHART-outcome-by-type
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-outcomes-per-day:
+    type: CHART
+    id: CHART-outcomes-per-day
+    children: []
+    meta:
+      width: 8
+      height: 60
+      chartId: null
+      uuid: bbf541d3-2823-5381-b418-38f63dcbb40b
+      sliceName: Check outcomes per day
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-trend
+  CHART-outcome-by-type:
+    type: CHART
+    id: CHART-outcome-by-type
+    children: []
+    meta:
+      width: 4
+      height: 60
+      chartId: null
+      uuid: 6b09c7a1-9a06-56d8-ad2b-3bab264350e9
+      sliceName: Current outcome by check type
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-trend
+
+  ROW-status:
+    type: ROW
+    id: ROW-status
+    children:
+      - CHART-check-status
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-check-status:
+    type: CHART
+    id: CHART-check-status
+    children: []
+    meta:
+      width: 12
+      height: 80
+      chartId: null
+      uuid: 704ea159-4845-59c5-84b8-44c5aa646016
+      sliceName: Check status
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-status
+
+  ROW-drops:
+    type: ROW
+    id: ROW-drops
+    children:
+      - CHART-rows-dropped
+      - CHART-pipeline-freshness
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-rows-dropped:
+    type: CHART
+    id: CHART-rows-dropped
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: 0db9c854-0ff4-5896-a55f-369ccf45cbbe
+      sliceName: Rows dropped by joins, filters and dedupes
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-drops
+  CHART-pipeline-freshness:
+    type: CHART
+    id: CHART-pipeline-freshness
+    children: []
+    meta:
+      width: 6
+      height: 60
+      chartId: null
+      uuid: 185c3566-f594-5ad2-aade-46d454b7ca44
+      sliceName: Pipeline freshness
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-drops
+
+  ROW-runs:
+    type: ROW
+    id: ROW-runs
+    children:
+      - CHART-runs-per-day
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+      - ROOT_ID
+      - GRID_ID
+  CHART-runs-per-day:
+    type: CHART
+    id: CHART-runs-per-day
+    children: []
+    meta:
+      width: 12
+      height: 60
+      chartId: null
+      uuid: 03cff2f1-5044-5144-a857-352d1ef3905e
+      sliceName: Pipeline runs per day
+    parents:
+      - ROOT_ID
+      - GRID_ID
+      - ROW-runs
+
+metadata:
+  color_scheme: supersetColors
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  # Narrowing by kind of check or by outcome is the first triage step. Both
+  # target the latest-results view, which three of the charts read.
+  native_filter_configuration:
+    - id: NATIVE_FILTER-check-type
+      name: Check type
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 932fa800-137b-5ca1-8c06-f179d3fb39f2
+          column:
+            name: check_type
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []
+    - id: NATIVE_FILTER-outcome
+      name: Outcome
+      filterType: filter_select
+      controlValues:
+        enableEmptyFilter: false
+        multiSelect: true
+        searchAllOptions: false
+        inverseSelection: false
+      targets:
+        - datasetUuid: 932fa800-137b-5ca1-8c06-f179d3fb39f2
+          column:
+            name: outcome
+      defaultDataMask:
+        filterState: {}
+        extraFormData: {}
+      scope:
+        rootPath:
+          - ROOT_ID
+        excluded: []

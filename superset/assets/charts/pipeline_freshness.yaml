@@ -1,0 +1,27 @@
+# Which pipelines have gone quiet
+slice_name: Pipeline freshness
+description: Hours since each pipeline last succeeded, stalest first
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 5dfa6413-6c43-500d-b219-58e406256106__table
+  time_range: No filter
+  row_limit: 1000
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - pipeline
+  - stage
+  - hours_since_success
+  - last_success_at
+  - successful_runs
+  - failed_runs
+  - last_rows_written
+  order_by_cols:
+  - '["hours_since_success", false]'
+query_context: null
+cache_timeout: null
+uuid: 185c3566-f594-5ad2-aade-46d454b7ca44
+version: 1.0.0
+dataset_uuid: 5dfa6413-6c43-500d-b219-58e406256106

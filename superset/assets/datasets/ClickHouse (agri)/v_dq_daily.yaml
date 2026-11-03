@@ -1,0 +1,101 @@
+# Data quality outcomes per day and check type, for the trend chart.
+# Passes are counted too, so a quiet day reads as a full bar.
+table_name: v_dq_daily
+main_dttm_col: check_date
+description: Checks per day by type and outcome, with rows failed
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: fa4ec418-cd95-5921-a056-ebbcb83d360e
+metrics:
+  - metric_name: checks_total
+    verbose_name: Checks
+    metric_type: sum
+    expression: SUM(checks)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: rows_failed_total
+    verbose_name: Rows failed
+    metric_type: sum
+    expression: SUM(rows_failed)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: check_date
+    verbose_name: Day
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: check_type
+    verbose_name: Check type
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: outcome
+    verbose_name: Outcome
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: checks
+    verbose_name: Checks
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rows_failed
+    verbose_name: Rows failed
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

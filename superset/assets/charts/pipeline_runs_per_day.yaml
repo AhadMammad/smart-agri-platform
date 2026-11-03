@@ -1,0 +1,30 @@
+# How often runs succeed
+slice_name: Pipeline runs per day
+description: Pipeline and suite runs per day, stacked by status
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 5c539b23-9433-5667-a35b-4a0ce5f5c5fe__table
+  granularity_sqla: started_at
+  time_range: No filter
+  row_limit: 10000
+  viz_type: echarts_timeseries_bar
+  x_axis: started_at
+  time_grain_sqla: P1D
+  metrics:
+  - count
+  groupby:
+  - status
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Day
+  x_axis_title_margin: 30
+  y_axis_title: Runs
+  y_axis_title_margin: 50
+  show_legend: true
+query_context: null
+cache_timeout: null
+uuid: 03cff2f1-5044-5144-a857-352d1ef3905e
+version: 1.0.0
+dataset_uuid: 5c539b23-9433-5667-a35b-4a0ce5f5c5fe

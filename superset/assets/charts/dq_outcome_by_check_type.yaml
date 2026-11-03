@@ -1,0 +1,30 @@
+# Where the warnings and failures come from right now
+slice_name: Current outcome by check type
+description: Each check's latest outcome, grouped by the kind of check
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 932fa800-137b-5ca1-8c06-f179d3fb39f2__table
+  time_range: No filter
+  row_limit: 100
+  viz_type: echarts_timeseries_bar
+  x_axis: check_type
+  metrics:
+  - count
+  groupby:
+  - outcome
+  stack: Stack
+  y_axis_format: ',d'
+  x_axis_title: Check type
+  x_axis_title_margin: 75
+  xAxisLabelRotation: 45
+  y_axis_title: Checks
+  y_axis_title_margin: 50
+  show_legend: true
+  x_axis_sort: name
+query_context: null
+cache_timeout: null
+uuid: 6b09c7a1-9a06-56d8-ad2b-3bab264350e9
+version: 1.0.0
+dataset_uuid: 932fa800-137b-5ca1-8c06-f179d3fb39f2

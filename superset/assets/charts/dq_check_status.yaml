@@ -1,0 +1,30 @@
+# Every check's latest result, failures first
+slice_name: Check status
+description: Latest result of every check — sorted so failures and warnings come first
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 932fa800-137b-5ca1-8c06-f179d3fb39f2__table
+  time_range: No filter
+  row_limit: 1000
+  viz_type: table
+  query_mode: raw
+  all_columns:
+  - outcome
+  - severity
+  - pipeline
+  - check_name
+  - observed_value
+  - threshold
+  - rows_failed
+  - rows_evaluated
+  - last_checked_at
+  order_by_cols:
+  - '["outcome", true]'
+  - '["pipeline", true]'
+query_context: null
+cache_timeout: null
+uuid: 704ea159-4845-59c5-84b8-44c5aa646016
+version: 1.0.0
+dataset_uuid: 932fa800-137b-5ca1-8c06-f179d3fb39f2

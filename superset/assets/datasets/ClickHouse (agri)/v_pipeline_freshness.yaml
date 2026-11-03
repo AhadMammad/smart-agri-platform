@@ -1,0 +1,116 @@
+# Hours since each pipeline last succeeded, beside its failure count.
+# Read from the run log, so it agrees with the freshness suite.
+table_name: v_pipeline_freshness
+main_dttm_col: last_success_at
+description: One row per pipeline — last success, hours since, runs and failures
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 5dfa6413-6c43-500d-b219-58e406256106
+metrics:
+  - metric_name: count
+    verbose_name: Pipelines
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: pipeline
+    verbose_name: Pipeline
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: stage
+    verbose_name: Stage
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: last_success_at
+    verbose_name: Last success
+    is_dttm: true
+    is_active: true
+    type: DATETIME
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: hours_since_success
+    verbose_name: Hours since success
+    is_dttm: false
+    is_active: true
+    type: FLOAT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: successful_runs
+    verbose_name: Successful runs
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: failed_runs
+    verbose_name: Failed runs
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: last_rows_written
+    verbose_name: Rows written (last run)
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a

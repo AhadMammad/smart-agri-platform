@@ -1,0 +1,160 @@
+# Every pipeline and suite run, copied hourly from etl-meta-db.
+table_name: ops_run_log
+main_dttm_col: started_at
+description: One row per run — status, row counts and timing
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: null
+schema: null
+sql: null
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+uuid: 5c539b23-9433-5667-a35b-4a0ce5f5c5fe
+metrics:
+  - metric_name: count
+    verbose_name: Runs
+    metric_type: count
+    expression: COUNT(*)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+  - metric_name: rows_quarantined_total
+    verbose_name: Rows quarantined
+    metric_type: sum
+    expression: SUM(rows_quarantined)
+    description: null
+    d3format: ',d'
+    currency: null
+    extra: null
+    warning_text: null
+columns:
+  - column_name: run_id
+    verbose_name: Run
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: pipeline
+    verbose_name: Pipeline
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: logical_date
+    verbose_name: Logical date
+    is_dttm: true
+    is_active: true
+    type: DATE
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: status
+    verbose_name: Status
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rows_read
+    verbose_name: Rows read
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rows_written
+    verbose_name: Rows written
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: rows_quarantined
+    verbose_name: Rows quarantined
+    is_dttm: false
+    is_active: true
+    type: BIGINT
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: started_at
+    verbose_name: Started
+    is_dttm: true
+    is_active: true
+    type: DATETIME
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: finished_at
+    verbose_name: Finished
+    is_dttm: true
+    is_active: true
+    type: DATETIME
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+  - column_name: error_message
+    verbose_name: Error
+    is_dttm: false
+    is_active: true
+    type: STRING
+    advanced_data_type: null
+    groupby: true
+    filterable: true
+    expression: null
+    description: null
+    python_date_format: null
+    extra: null
+version: 1.0.0
+database_uuid: fa543293-4226-5256-b1cf-c16eeb2f8d6a
