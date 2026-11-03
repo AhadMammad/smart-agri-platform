@@ -273,8 +273,19 @@ class SilverPipeline(BasePipeline):
 
     # -- load ----------------------------------------------------------------
     def load(self, frame: pl.DataFrame, run: RunContext) -> int:
+        """Replace this date's partition — or remove it, when there is nothing to write.
+
+        A quiet day leaves an incremental Bronze partition with no batches, so
+        the extract is a frame with no columns at all. Writing that would leave a
+        column-less file among the real partitions, and every reader that
+        concatenates them — Gold, the fact loads — fails on it. Nothing to write
+        means no partition, exactly as an empty Bronze batch writes no file.
+        """
         directory = self._partition_path(LakeZone.SILVER, self.spec.partition_key, run)
         self.context.hdfs.remove(directory)
+        if frame.is_empty():
+            logger.info("silver_partition_skipped", pipeline=self.name, reason="no rows")
+            return 0
         return self.context.hdfs.write_parquet(frame, f"{directory}/{DATA_FILE}")
 
 

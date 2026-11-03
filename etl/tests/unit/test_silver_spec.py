@@ -520,3 +520,41 @@ class TestDropCounting:
             None,
         )
         assert (duplicates["outcome"], duplicates["rows_failed"]) == ("passed", 1)
+
+
+class TestQuietDays:
+    """A day with no new source rows is normal for an incremental fact."""
+
+    def test_no_bronze_batch_writes_no_silver_partition(
+        self, context: PipelineContext, hdfs: FakeHdfsStore
+    ) -> None:
+        """Regression: Silver wrote a column-less file for the quiet day, and every
+        reader concatenating the partitions — Gold, the fact loads — failed with
+        'schema lengths differ'. Found by the first daily Airflow run of Phase 9."""
+        earlier = hdfs.zone_path(
+            LakeZone.SILVER, "widget", f"{INGEST_PARTITION_KEY}=2026-07-31", DATA_FILE
+        )
+        hdfs.files[earlier] = pl.DataFrame(
+            {"widget_id": [1], "widget_code": ["a"], "colour": ["red"]}
+        )
+        spec = SilverSpec(dataset="widget", bronze="widget", schema=SIMPLE_SCHEMA, incremental=True)
+
+        run(spec, context)
+
+        with pytest.raises(KeyError):
+            silver_of(hdfs, spec)
+        every_partition = hdfs.read_parquet_dir(hdfs.zone_path(LakeZone.SILVER, "widget"))
+        assert every_partition["widget_id"].to_list() == [1]
+
+    def test_a_rerun_after_the_batch_vanished_clears_the_stale_partition(
+        self, context: PipelineContext, hdfs: FakeHdfsStore
+    ) -> None:
+        spec = SilverSpec(dataset="widget", bronze="widget", schema=SIMPLE_SCHEMA, incremental=True)
+        stale = hdfs.zone_path(
+            LakeZone.SILVER, "widget", f"{spec.partition_key}={PARTITION}", DATA_FILE
+        )
+        hdfs.files[stale] = pl.DataFrame()
+
+        run(spec, context)
+
+        assert stale not in hdfs.files
