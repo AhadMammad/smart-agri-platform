@@ -87,3 +87,29 @@ class TestEtlTaskFactory:
                     assert task.network_mode == expected, (
                         f"{dag_id}.{task.task_id} is not on the platform network"
                     )
+
+
+class TestDataQualityTasks:
+    @pytest.mark.parametrize(
+        ("dag_id", "suite"),
+        [
+            ("soil_sensor_daily", "reconcile.soil_sensor"),
+            ("analytics_daily", "reconcile.analytics"),
+        ],
+    )
+    def test_reconciliation_runs_after_the_load(
+        self, dagbag: DagBag, dag_id: str, suite: str
+    ) -> None:
+        """Before the load finishes, the warehouse is mid-replace and every
+        comparison with the source is wrong."""
+        dag = dagbag.dags[dag_id]
+        task = dag.get_task(f"quality.{suite.replace('.', '_')}")
+
+        assert task.command[:3] == ["dq", "run", suite]
+        upstream = {t.task_id for t in task.get_flat_relatives(upstream=True)}
+        assert any(t.startswith("load.") for t in upstream)
+
+    def test_freshness_runs_hourly_on_its_own(self, dagbag: DagBag) -> None:
+        dag = dagbag.dags["data_quality"]
+        assert str(dag.schedule_interval) == "@hourly"
+        assert dag.get_task("freshness").command[:3] == ["dq", "run", "freshness"]

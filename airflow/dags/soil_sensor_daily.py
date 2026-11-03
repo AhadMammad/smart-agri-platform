@@ -15,6 +15,7 @@ import pendulum
 from airflow.models.dag import DAG
 from airflow.utils.task_group import TaskGroup
 from common.etl_task import etl_task
+from common.lake_tasks import add_quality_group
 from common.pipelines import SOIL_SENSOR_STAGES, STAGE_LABELS, task_id_for
 
 with DAG(
@@ -49,3 +50,5 @@ with DAG(
         if previous_group is not None:
             previous_group >> group
         previous_group = group
+
+    add_quality_group("soil_sensor", previous_group)

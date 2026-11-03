@@ -188,6 +188,36 @@ class TestDomainStagesMatchRegistry:
             assert len(dag_domains[domain]) == 2, f"{domain} is not Bronze-then-Silver"
 
 
+class TestQualitySuitesMatchRegistry:
+    """The DAGs schedule suites by name; the ETL decides which suites exist.
+
+    A suite the DAG names but the CLI does not know fails every run with exit 2.
+    A suite the ETL derives but the DAG copy lacks never runs at all — the more
+    dangerous drift, because nothing reports it.
+    """
+
+    def test_domain_suites_are_identical_to_the_etl(self) -> None:
+        from smart_agri.quality.suites import domain_quality_suites
+
+        value = _literal_from_module(DAG_PIPELINES_FILE, "DOMAIN_QUALITY_SUITES")
+        dag_copy = {domain: tuple(names) for domain, names in value.items()}  # type: ignore[union-attr]
+        assert dag_copy == domain_quality_suites()
+
+    def test_every_scheduled_suite_exists(self) -> None:
+        from smart_agri.quality.suites import dq_suites
+
+        scheduled = _literal_from_module(DAG_PIPELINES_FILE, "SCHEDULED_QUALITY_SUITES")
+        assert set(scheduled) <= set(dq_suites())  # type: ignore[arg-type]
+
+    def test_every_suite_is_scheduled_somewhere(self) -> None:
+        from smart_agri.quality.suites import dq_suites
+
+        domain = _literal_from_module(DAG_PIPELINES_FILE, "DOMAIN_QUALITY_SUITES")
+        scheduled = _literal_from_module(DAG_PIPELINES_FILE, "SCHEDULED_QUALITY_SUITES")
+        covered = {n for names in domain.values() for n in names} | set(scheduled)  # type: ignore[union-attr, arg-type]
+        assert covered == set(dq_suites())
+
+
 class TestRegistryCoverage:
     def test_every_registered_pipeline_runs_in_some_stage(self) -> None:
         """An orphaned pipeline is either dead code or a forgotten DAG task."""

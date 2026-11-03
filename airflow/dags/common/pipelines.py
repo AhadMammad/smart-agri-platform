@@ -163,6 +163,20 @@ DOMAIN_STAGES: dict[str, tuple[tuple[str, ...], ...]] = {
     "analytics": ANALYTICS_STAGES,
 }
 
+#: Data quality suites each domain DAG runs after its last stage (Phase 9).
+#: Mirrors `smart_agri.quality.suites.domain_quality_suites()`;
+#: `test_dag_pipeline_sync.py` diffs the two. A domain absent here runs none.
+DOMAIN_QUALITY_SUITES: dict[str, tuple[str, ...]] = {
+    "soil_sensor": ("reconcile.soil_sensor",),
+    "analytics": ("reconcile.analytics",),
+}
+
+#: The TaskGroup the suites run in, after the domain's last stage.
+QUALITY_GROUP = "quality"
+
+#: Suites the hourly `data_quality` DAG runs, independent of any domain DAG.
+SCHEDULED_QUALITY_SUITES: tuple[str, ...] = ("freshness",)
+
 #: Bronze and Silver stages share these labels across the Phase 5 domains.
 LAKE_STAGE_LABELS: tuple[str, ...] = ("bronze", "silver")
 

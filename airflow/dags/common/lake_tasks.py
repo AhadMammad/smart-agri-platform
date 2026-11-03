@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING
 
 from airflow.utils.task_group import TaskGroup
 from common.etl_task import etl_task
-from common.pipelines import DOMAIN_STAGES, LAKE_STAGE_LABELS, task_id_for
+from common.pipelines import (
+    DOMAIN_QUALITY_SUITES,
+    DOMAIN_STAGES,
+    LAKE_STAGE_LABELS,
+    QUALITY_GROUP,
+    task_id_for,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -61,3 +67,30 @@ def build_domain_stages(
         if previous is not None:
             previous >> group
         previous = group
+
+    add_quality_group(domain, previous, execution_date)
+
+
+def add_quality_group(
+    domain: str, after: TaskGroup | None, execution_date: str = "{{ ds }}"
+) -> TaskGroup | None:
+    """Run the domain's data quality suites once its last stage has finished.
+
+    Last, because reconciliation compares the warehouse with the source and is
+    only meaningful once the load is complete. A failed suite fails the DAG run,
+    which is what makes it visible; nothing runs after it to block.
+    """
+    suites = DOMAIN_QUALITY_SUITES.get(domain, ())
+    if not suites:
+        return None
+
+    with TaskGroup(group_id=QUALITY_GROUP) as group:
+        for suite in suites:
+            etl_task(
+                task_id=suite.replace(".", "_"),
+                command=["dq", "run", suite, "--date", execution_date],
+            )
+
+    if after is not None:
+        after >> group
+    return group
