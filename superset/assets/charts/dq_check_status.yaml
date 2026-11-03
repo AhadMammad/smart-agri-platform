@@ -21,7 +21,7 @@ params:
   - rows_evaluated
   - last_checked_at
   order_by_cols:
-  - '["outcome", true]'
+  - '["outcome_rank", true]'
   - '["pipeline", true]'
 query_context: null
 cache_timeout: null

@@ -63,7 +63,10 @@ SELECT
     argMax(target, checked_at)         AS target,
     argMax(severity, checked_at)       AS severity,
     argMax(outcome, checked_at)        AS outcome,
-    argMax(observed_value, checked_at) AS observed_value,
+    -- Triage order for the status table: alphabetical would put `warned` last.
+    multiIf(outcome = 'failed', 0, outcome = 'warned', 1, outcome = 'skipped', 2, 3)
+                                       AS outcome_rank,
+    round(argMax(observed_value, checked_at), 4) AS observed_value,
     argMax(threshold, checked_at)      AS threshold,
     argMax(rows_failed, checked_at)    AS rows_failed,
     argMax(rows_evaluated, checked_at) AS rows_evaluated,
