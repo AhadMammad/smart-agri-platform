@@ -19,6 +19,7 @@ from smart_agri.config import LakeZone
 from smart_agri.contracts import GOLD_FIELD_SOIL_DAILY
 from smart_agri.pipelines.base import BasePipeline
 from smart_agri.pipelines.bronze import DATA_FILE, SNAPSHOT_PARTITION_KEY
+from smart_agri.pipelines.silver_specs import SILVER_SPECS_BY_DATASET
 from smart_agri.utils import get_logger
 
 if TYPE_CHECKING:
@@ -52,14 +53,23 @@ class GoldPipeline(BasePipeline):
         return self.context.hdfs.read_parquet(path)
 
     def _read_silver_facts(self, dataset: str) -> pl.DataFrame:
-        """Every partition of a Silver fact.
+        """Every partition of a Silver fact, one row per natural key.
 
         A directory read, not a file read: incremental Silver lands one file per
         batch, so reading a single path would see only the most recent one.
+
+        Deduplicated across partitions, because Silver dedupes only within one:
+        a watermark reset re-extracts rows already landed under an earlier date,
+        and every count in the mart would double. The newest partition's copy
+        wins, as it does in the fact load. The dropped duplicates are recorded.
         """
-        return self.context.hdfs.read_parquet_dir(
+        facts = self.context.hdfs.read_parquet_dir(
             self.context.hdfs.zone_path(LakeZone.SILVER, dataset), missing_ok=True
         )
+        spec = SILVER_SPECS_BY_DATASET.get(dataset)
+        if facts.is_empty() or spec is None or not spec.dedupe_on:
+            return facts
+        return self._dedupe_on(facts, spec.dedupe_on)
 
     def _read_gold(self, dataset: str, run: RunContext) -> pl.DataFrame:
         """Another Gold dataset from this run's partition.
@@ -100,10 +110,7 @@ class GoldFieldSoilDailyPipeline(GoldPipeline):
         dimensions come from the current snapshot so a renamed field shows its
         new name across all history.
         """
-        facts = self.context.hdfs.read_parquet_dir(
-            self.context.hdfs.zone_path(LakeZone.SILVER, "fact_sensor_reading"),
-            missing_ok=True,
-        )
+        facts = self._read_silver_facts("fact_sensor_reading")
         if facts.is_empty():
             logger.warning("no_silver_facts", pipeline=self.name)
             return facts

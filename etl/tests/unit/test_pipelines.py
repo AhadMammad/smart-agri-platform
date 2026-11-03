@@ -491,6 +491,33 @@ class TestGoldFieldSoilDaily:
             )
         ]
 
+    def test_a_reading_landed_under_two_dates_is_counted_once(
+        self, silver_loaded: PipelineContext, hdfs: FakeHdfsStore, control: FakeControlStore
+    ) -> None:
+        """Regression: a watermark reset re-extracts every reading under a new
+        ingest date. Silver dedupes within a partition only, so Gold saw each
+        reading twice and doubled `reading_count`. Found on the VM by the Phase 9
+        drop counts: 342,596 readings in the mart, 171,298 in the warehouse."""
+        partition = f"{INGEST_PARTITION_KEY}={PARTITION}"
+        original = hdfs.zone_path(LakeZone.SILVER, "fact_sensor_reading", partition, DATA_FILE)
+        replay = original.replace(partition, f"{INGEST_PARTITION_KEY}=2026-08-02")
+        hdfs.files[replay] = hdfs.files[original]
+
+        get_pipeline("gold.field_soil_daily", silver_loaded).run(LOGICAL_DATE)
+
+        gold = hdfs.files[
+            hdfs.zone_path(
+                LakeZone.GOLD, "field_soil_daily", f"{RUN_PARTITION_KEY}={PARTITION}", DATA_FILE
+            )
+        ]
+        assert gold.filter(pl.col("field_id") == 10)["reading_count"].item() == 2
+        (dedupe,) = [
+            c
+            for c in control.checks_named("dedupe.reading_id")
+            if c["pipeline"] == "gold.field_soil_daily"
+        ]
+        assert dedupe["rows_failed"] == dedupe["rows_evaluated"] // 2
+
     def test_one_row_per_field_per_day(self, gold: pl.DataFrame) -> None:
         # Fields 10 and 11 have live sensors; field 12's only probe is dead.
         assert gold.height == 2
