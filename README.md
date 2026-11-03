@@ -327,6 +327,7 @@ See [docs/architecture.md](docs/architecture.md) for the reasoning in full.
 | 6 | Gold layer and full ClickHouse star schema | **done** | 27 tables + 15 views; every dashboard question answered by one query |
 | 7 | Superset dashboards as code | **done** | Four dashboards reproduced from an empty stack |
 | 8 | CI, quality gates, documentation | **done** | 8 CI jobs green from a cold clone; [runbook](docs/runbook.md) from clone to dashboards |
+| 9 | Data quality: checks, severity, alerts, dashboard | **done** | Every DAG green from Airflow with checks recorded; injected faults warn, stop the run and email as designed |
 
 Deferred: Iceberg migration, Spark, and ML (yield forecasting, irrigation-need
 prediction, anomaly detection).
@@ -441,3 +442,32 @@ Where a unit test could reasonably have caught one, it now does — the seeder's
 column guard parses the Liquibase changelogs and would have flagged the fourth.
 The rest are why the plan treats a real run as each phase's exit criterion
 rather than a formality.
+
+Phase 9, measured on the VM with every pipeline run by Airflow:
+
+- **ETL bookkeeping moved out of the source.** `etl-meta-db` holds the
+  watermarks, run log and check results; the source has no `etl_control`, and
+  `make migrate` re-runs cleanly (0 changesets applied twice in a row).
+- **Every domain DAG green**, `soil_sensor_daily` and `analytics_daily` ending
+  in their reconciliation group. Every run that reached its checks recorded
+  them — reconciliation, rejection rate, joins, filters, dedupes, volume.
+- **A warning quarantines and carries on.** 1 out-of-range reading in a batch
+  of 11: one row quarantined, `schema.soil_moisture_pct.in_range` *warned*,
+  rejection rate 9.1% under the 10% gate, DAG green.
+- **An error stops the run.** A batch entirely out of range: Silver exited with
+  code 3, `gold`, `load` and `quality` went `upstream_failed`, the run log
+  recorded `rejection_rate observed=1 threshold=0.1`, and the alert email
+  arrived in Mailpit.
+- **Freshness catches a DAG that never ran.** Before the day's runs, 27
+  final-stage pipelines warned at 91 hours stale; after them, all 43 passed.
+- **The copies agree.** 250 runs in Postgres and in ClickHouse; 28/28 charts
+  return data across six dashboards; 14/14 DAG integrity and 23/23 integration
+  tests pass.
+
+The real run found two bugs that 778 unit tests had passed, both older than
+Phase 9 and both now pinned by a regression test:
+
+| Bug | Why nothing caught it |
+|---|---|
+| A day with no new source rows wrote a column-less Silver file, and Gold then failed on every run | Every earlier run reused a date that already had data |
+| `agg_field_soil_daily` counted every reading twice after a watermark reset | Silver deduplicates within a partition, and nothing compared the mart's counts with the warehouse — until the new dedupe counts showed 171,288 duplicates |
